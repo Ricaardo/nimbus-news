@@ -10,11 +10,11 @@ FAIL_THRESHOLD=3
 STATE_FILE="/opt/news/logs/health-probe.state"
 PROBE_LOG="/opt/news/logs/health-probe.log"
 
-# 企业微信 webhook 从 .env 读取
+# 企业微信 webhook 从 .env 读取（VPS 上 key 为 WECHAT_WEBHOOK）
 if [ -f /opt/news/.env ]; then
   set -a; source /opt/news/.env; set +a
 fi
-WEBHOOK_URL="${WECHAT_WEBHOOK_URL:-}"
+WEBHOOK_URL="${WECHAT_WEBHOOK_URL:-${WECHAT_WEBHOOK:-}}"
 
 probe() {
   local body

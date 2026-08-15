@@ -2,7 +2,7 @@
 # ============================================================
 # VPS 部署同步脚本（本地 Mac 运行）
 #   1. 交叉编译 Linux amd64 platform 二进制
-#   2. 同步二进制 + scripts/ + deploy/ + config + .env 到 VPS
+#   2. 同步二进制 + scripts/ + deploy/ + config 到 VPS
 #   3. 安装 VPS 运维 cron（数据备份 7 天、外部探活→企业微信）
 #   4. systemctl restart news-platform + 健康检查
 #
@@ -10,6 +10,9 @@
 #   ./deploy/sync-vps.sh          # 全量部署
 #   ./deploy/sync-vps.sh --skip-build   # 跳过编译（只同步+重启）
 #   ./deploy/sync-vps.sh --skip-restart # 同步但重启服务
+#
+# 注意: 直接运行本脚本，不要用管道包裹（`sync-vps.sh | tail` 会吞退出码，
+#   失败会误报成功——2026-08-16 部署踩过：二进制传坏导致 SEGV 崩溃）。
 # ============================================================
 set -euo pipefail
 
@@ -41,14 +44,29 @@ test -f bin/platform-linux-amd64 || { echo "ERROR: bin/platform-linux-amd64 不�
 # ---------- 2. 同步文件 ----------
 echo ">>> 同步到 $VPS_HOST:$REMOTE_DIR ..."
 $SSH "mkdir -p $REMOTE_DIR/{bin,scripts,deploy,data,logs,venv}"
-scp -q -o ConnectTimeout=10 bin/platform-linux-amd64 "$VPS_HOST:$REMOTE_DIR/bin/platform.new"
+
+# 二进制走 gzip 传输（101MB→37MB，VPS 线路不稳时更抗中断），
+# 传完后在 VPS 上解压并校验 SHA256，防止坏文件上线（SEGV 事故教训）
+gzip -kf bin/platform-linux-amd64
+scp -q -o ConnectTimeout=15 bin/platform-linux-amd64.gz "$VPS_HOST:$REMOTE_DIR/bin/platform.new.gz"
+LOCAL_SHA="$(shasum -a 256 bin/platform-linux-amd64 | awk '{print $1}')"
+$SSH "cd $REMOTE_DIR/bin && gunzip -f platform.new.gz && \
+  test \"\$(sha256sum platform.new | awk '{print \$1}')\" = \"$LOCAL_SHA\" \
+  && echo 'binary sha256 OK' || { echo 'binary sha256 MISMATCH'; exit 1; }"
+
 scp -q -r scripts/*.py "$VPS_HOST:$REMOTE_DIR/scripts/"
 scp -q deploy/launch-vps.sh deploy/news-platform.service "$VPS_HOST:$REMOTE_DIR/deploy/"
 
-# config 与 .env 含密钥，仅本地持有；同步失败（如文件缺失）即中止，不留半套
+# config 含密钥，仅本地持有；同步失败（如文件缺失）即中止，不留半套
 scp -q config.platform.vps.yaml "$VPS_HOST:$REMOTE_DIR/config.platform.vps.yaml"
-scp -q .env "$VPS_HOST:$REMOTE_DIR/.env"
 scp -q deploy/health-probe.sh "$VPS_HOST:$REMOTE_DIR/deploy/health-probe.sh"
+
+# .env 真源在 VPS（本地不保存密钥）；本地有同名文件时才覆盖
+if [ -f .env ]; then
+  scp -q .env "$VPS_HOST:$REMOTE_DIR/.env"
+else
+  echo ">>> 本地无 .env，保留 VPS 现有 $REMOTE_DIR/.env（密钥真源）"
+fi
 
 $SSH "chmod +x $REMOTE_DIR/deploy/launch-vps.sh $REMOTE_DIR/deploy/health-probe.sh"
 
