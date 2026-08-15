@@ -13,5 +13,5 @@ SRC=/opt/news/feed/
 DST="$HOME/nimbus-os/nimbus/workspace/feed"
 
 # 不用 --delete: 保留本地 13f-latest.json 等 VPS 不产出的历史文件
-rsync -az --timeout 15 "$VPS:$SRC" "$DST" 2>>"$HOME/nimbus-os/news/logs/feed-pull.err.log" \
-  || echo "$(date +%FT%T) rsync failed: $?" >>"$HOME/nimbus-os/news/logs/feed-pull.err.log"
+rsync -az --timeout 15 "$VPS:$SRC" "$DST" 2>>"$HOME/nimbus-news/logs/feed-pull.err.log" \
+  || echo "$(date +%FT%T) rsync failed: $?" >>"$HOME/nimbus-news/logs/feed-pull.err.log"
