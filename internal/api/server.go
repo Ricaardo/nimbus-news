@@ -47,16 +47,10 @@ const (
 
 // NewServer 创建 API 服务器
 func NewServer(cfg *config.ConfigManager, port int) *Server {
-	return newServer(cfg, port, false)
+	return newServer(cfg, port)
 }
 
-// NewReadOnlyServer creates a server whose mutating endpoints are disabled.
-// It is used by shadow candidates so they cannot rewrite production config.
-func NewReadOnlyServer(cfg *config.ConfigManager, port int) *Server {
-	return newServer(cfg, port, true)
-}
-
-func newServer(cfg *config.ConfigManager, port int, readOnly bool) *Server {
+func newServer(cfg *config.ConfigManager, port int) *Server {
 	gin.SetMode(gin.ReleaseMode)
 
 	s := &Server{
@@ -68,16 +62,6 @@ func newServer(cfg *config.ConfigManager, port int, readOnly bool) *Server {
 	s.router.Use(gin.Logger())
 	s.router.Use(adminSecurity)
 	s.router.Use(gin.Recovery())
-	if readOnly {
-		s.router.Use(func(c *gin.Context) {
-			switch c.Request.Method {
-			case http.MethodGet, http.MethodHead, http.MethodOptions:
-				c.Next()
-			default:
-				c.AbortWithStatusJSON(http.StatusMethodNotAllowed, gin.H{"error": "shadow API is read-only"})
-			}
-		})
-	}
 
 	s.registerRoutes()
 

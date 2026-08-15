@@ -1,6 +1,7 @@
 package bootstrap
 
 import (
+	"fmt"
 	"log/slog"
 
 	"github.com/Ricaardo/nimbus-os/datasources/market"
@@ -11,7 +12,6 @@ import (
 	"github.com/Ricaardo/nimbus-os/news/internal/digest"
 	"github.com/Ricaardo/nimbus-os/news/internal/filter"
 	"github.com/Ricaardo/nimbus-os/news/internal/llm"
-	"github.com/Ricaardo/nimbus-os/news/internal/portfolio"
 	"github.com/Ricaardo/nimbus-os/news/internal/source"
 	"github.com/Ricaardo/nimbus-os/news/internal/store"
 
@@ -74,34 +74,24 @@ func InitRouter(
 	return router, engine, nil
 }
 
-// InitAlert initializes alert engine and portfolio service.
-func InitAlert(cfg *config.PlatformConfig, db *bolt.DB, marketService *market.CachedService) (*alert.Engine, *portfolio.Service) {
+// InitAlert initializes the alert engine.
+func InitAlert(cfg *config.PlatformConfig, db *bolt.DB, marketService *market.CachedService) (*alert.Engine, error) {
 	var alertEngine *alert.Engine
 	if cfg.Alert.Enabled {
 		alertStore, err := alert.NewStore(db)
 		if err != nil {
-			slog.Error("failed to init alert store", "error", err)
-		} else {
-			alertEngine = alert.NewEngine(alertStore, alert.EngineConfig{
-				CheckInterval:    cfg.GetAlertCheckInterval(),
-				MaxAlertsPerUser: cfg.Alert.MaxAlertsPerUser,
-				DefaultCooldown:  cfg.GetAlertDefaultCooldown(),
-				Enabled:          true,
-			})
-			alertEngine.SetMarketProvider(marketService)
-			slog.Info("alert engine initialized")
+			return nil, fmt.Errorf("init alert store: %w", err)
 		}
+		alertEngine = alert.NewEngine(alertStore, alert.EngineConfig{
+			CheckInterval:    cfg.GetAlertCheckInterval(),
+			MaxAlertsPerUser: cfg.Alert.MaxAlertsPerUser,
+			DefaultCooldown:  cfg.GetAlertDefaultCooldown(),
+			Enabled:          true,
+		})
+		alertEngine.SetMarketProvider(marketService)
+		slog.Info("alert engine initialized")
 	}
-
-	portfolioStore, err := portfolio.NewStore(db)
-	if err != nil {
-		slog.Error("failed to init portfolio store", "error", err)
-		return alertEngine, nil
-	}
-	portfolioService := portfolio.NewService(portfolioStore, marketService)
-	slog.Info("portfolio service initialized")
-
-	return alertEngine, portfolioService
+	return alertEngine, nil
 }
 
 func buildSourceConfigs(cfg *config.PlatformConfig) []core.SourceConfig {

@@ -1,126 +1,87 @@
-# 部署说明
+# 部署说明（当前架构：VPS systemd，2026-08 起）
 
-## 首次初始化
+## 拓扑
 
-```bash
-make init
-```
+- **代码仓**：本地 `~/nimbus-news`（唯一 git 仓库，两仓制：nimbus-os 持 datasources/guanfu 模块，经 go.mod replace 引用）
+- **运行机**：VPS（`root@45.77.26.44`），目录 `/opt/news`，**非 git 仓库**
+- **服务**：systemd `news-platform.service`（`Type=simple`，ExecStart=`deploy/launch-vps.sh`，TZ=Asia/Shanghai）
+- **进程**：`./bin/platform -config config.platform.vps.yaml`，API 仅监听 127.0.0.1:8081
 
-该命令会在本地创建：
+VPS 需要的可执行环境：`bin/platform`（本地交叉编译的 Linux amd64 ELF）、
+`venv/`（python3 + akshare/ecocal 等，PATH 由 launch-vps.sh 前置）、
+`scripts/*.py`（script 源）、`config.platform.vps.yaml`、`.env`（密钥）。
 
-- `config.yaml`
-- `.env`
-- `data/cache`
-- `data/index`
-- `data/reports`
-
-`config.yaml` 和 `.env` 都是本地文件，不提交到 Git。
-
-## 配置原则
-
-运行配置只有一个入口：`config.yaml`。
-
-模板文件 `config.yaml.example` 中的渠道默认关闭，生产部署时按需启用，并在 `.env` 中补齐对应密钥。服务启动时会展开 `${VAR}`。
-
-常用环境变量：
-
-```env
-FRONTEND_PORT=80
-BACKEND_API_PORT=8081
-WEBHOOK_PORT=8080
-WXOFFICIAL_PORT=8082
-MINIMAX_API_KEY=
-FEISHU_APP_ID=
-FEISHU_APP_SECRET=
-WECHAT_WEBHOOK_URL=
-DISCORD_PUSH_WEBHOOK=
-DISCORD_BOT_TOKEN=
-FINNHUB_API_KEY=
-FRED_API_KEY=
-LONGPORT_APP_KEY=
-LONGPORT_APP_SECRET=
-LONGPORT_ACCESS_TOKEN=
-```
-
-> Longbridge 行情适配器（港股/A股/美股，优先级最高）需以上三件套，缺失则静默让位
-> Futu/AKShare。详见 [行情适配器](market-adapters.md)。token 会过期（约 90 天），
-> 用 `make smoke-longbridge` 监控。
-
-## Docker 部署
+## 部署（一条命令）
 
 ```bash
-make deploy
-make health
+cd ~/nimbus-news
+./deploy/sync-vps.sh          # 编译 + 同步 + 安装 cron + 重启 + 健康检查
+./deploy/sync-vps.sh --skip-build    # 只同步+重启（代码没动时）
+./deploy/sync-vps.sh --skip-restart # 只同步不重启
 ```
 
-服务拓扑：
+脚本幂等地做四件事：
 
-- `backend`: Go 主服务，读取 `/app/config.yaml`，数据写入 `/app/data`
-- `frontend`: Vue + Nginx，代理 `/api/` 到 `backend:8081/api/`
+1. `CGO_ENABLED=0 GOOS=linux GOARCH=amd64` 交叉编译 `bin/platform-linux-amd64`
+2. scp 同步：二进制（原子替换）、`scripts/*.py`、`deploy/`、`config.platform.vps.yaml`、`.env`
+3. 安装/刷新 VPS cron（见下）
+4. `systemctl restart news-platform` + `curl /api/health` 验证
 
-默认访问地址：
+> `config.platform.vps.yaml` 与 `.env` 含密钥且 gitignored，只存在于本地与 VPS；
+> **严禁提交**。VPS 上的这两个文件被 scp 覆盖，本地即为真源。
 
-- 前端: `http://localhost:${FRONTEND_PORT:-80}`
-- 后端 API: `http://localhost:${BACKEND_API_PORT:-8081}/api`
-- API 健康检查: `http://localhost:${BACKEND_API_PORT:-8081}/api/health`
-- 前端健康检查: `http://localhost:${FRONTEND_PORT:-80}/health`
+## VPS 运维（sync-vps.sh 自动安装，幂等）
 
-常用命令：
+| 任务 | 触发 | 内容 |
+|---|---|---|
+| 数据备份 | 每日 03:15 | `tar czf backups/platform.$(date +%Y%m%d).db.tgz data/platform.db`，保留 7 天自动删除 |
+| 外部探活 | 每 5 分钟 | `deploy/health-probe.sh`：curl `/api/health`，**连续 3 次**失败 → 企业微信 webhook 告警（独立于平台进程，平台挂了它照样跑） |
+
+手动操作：
 
 ```bash
-make logs
-make logs-backend
-make logs-frontend
-make restart
-make down
-make clean
+ssh root@45.77.26.44
+systemctl status news-platform          # 状态
+tail -f /opt/news/logs/platform.out.log # 平台日志
+journalctl -u news-platform -e          # systemd 侧日志
+crontab -l                              # 查看备份/探活 cron
 ```
+
+## 配置
+
+- 运行配置唯一入口：`config.platform.vps.yaml`（渠道、源调度、脚本源参数）
+- 密钥在 `.env`，`launch-vps.sh` 启动时 source 进环境；脚本源 subprocess 同样继承
+- 模板：`config.platform.vps.yaml.example`（渠道默认关闭）
+- 常用密钥：`WECHAT_WEBHOOK_URL`（企业微信，探活告警同用）、`DISCORD_PUSH_WEBHOOK`、
+  `FINNHUB_API_KEY`（earnings-calendar）、`FRED_API_KEY`（宏观报告）、LLM key
+
+数据源全览见 [SOURCES.md](SOURCES.md)。
 
 ## 本地开发
 
 ```bash
-make init
-make python-deps
-make dev-backend
-make dev-frontend
+cd ~/nimbus-news
+make python-deps          # venv 装 scripts 依赖（akshare/ecocal 等，见 scripts/requirements.txt）
+make build-native         # 本地 go build ./cmd/platform
+go run ./cmd/platform -config config.platform.yaml   # 本地起服务（8081）
 ```
 
-后端默认：
+本地 `config.platform.yaml` 同样 gitignored，自建一份（复制 example + vps 配置的渠道/密钥）。
+
+## 数据与生成物（不提交）
+
+- `data/*.db`（BoltDB 平台库、market.db）
+- `bin/`、`venv/`、`logs/`、`backups/`、`scripts/__pycache__/`
+
+备份/恢复：
 
 ```bash
-go run ./cmd/platform -config config.yaml
-```
-
-前端默认：
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-## 数据与生成物
-
-以下路径为运行期生成物，不提交：
-
-- `data/*.db`
-- `data/cache/`
-- `data/index/`
-- `data/reports/`
-- `bin/`
-- `web/node_modules/`
-- 根目录构建出的可执行文件
-
-重新生成标的索引：
-
-```bash
-make symbols
-```
-
-备份数据：
-
-```bash
-make backup
+# VPS 上
+ls /opt/news/backups/                        # 每日 03:15 的 platform.*.db.tgz
+# 恢复：停服务 → 解压覆盖 data/platform.db → 启动
+systemctl stop news-platform
+tar xzf backups/platform.20260816.db.tgz -C /opt/news   # 恢复备份当天数据
+systemctl start news-platform
 ```
 
 ## Digest topics v4 显式迁移
@@ -134,12 +95,12 @@ make backup
 cp data/platform.db data/platform.topics-v4.rehearsal.db
 go run ./cmd/digest-migrate \
   --db data/platform.topics-v4.rehearsal.db \
-  --config config.platform.yaml > /tmp/topics-v4-dry-run.json
+  --config config.platform.vps.yaml > /tmp/topics-v4-dry-run.json
 
 BEFORE_HASH=$(jq -r .before_hash /tmp/topics-v4-dry-run.json)
 go run ./cmd/digest-migrate \
   --db data/platform.topics-v4.rehearsal.db \
-  --config config.platform.yaml \
+  --config config.platform.vps.yaml \
   --mode apply \
   --expected-before-hash "$BEFORE_HASH"
 ```
@@ -152,10 +113,10 @@ go run ./cmd/digest-migrate \
 
 ```bash
 cp data/platform.db data/platform.pre-topics-v4.db
-go run ./cmd/digest-migrate --db data/platform.db --config config.platform.yaml \
+go run ./cmd/digest-migrate --db data/platform.db --config config.platform.vps.yaml \
   > /tmp/topics-v4-production-dry-run.json
 BEFORE_HASH=$(jq -r .before_hash /tmp/topics-v4-production-dry-run.json)
-go run ./cmd/digest-migrate --db data/platform.db --config config.platform.yaml \
+go run ./cmd/digest-migrate --db data/platform.db --config config.platform.vps.yaml \
   --mode apply --expected-before-hash "$BEFORE_HASH"
 ```
 

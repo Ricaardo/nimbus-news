@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,11 +17,9 @@ import (
 	"github.com/Ricaardo/nimbus-os/news/internal/alert"
 	"github.com/Ricaardo/nimbus-os/news/internal/api"
 	"github.com/Ricaardo/nimbus-os/news/internal/bootstrap"
-	"github.com/Ricaardo/nimbus-os/news/internal/candidate"
 	"github.com/Ricaardo/nimbus-os/news/internal/channel"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/discord"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/feishu"
-	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/filefeed"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/telegram"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/wechat"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/wxofficial"
@@ -35,29 +32,10 @@ import (
 	"github.com/Ricaardo/nimbus-os/news/internal/store"
 )
 
-// TraderOptions preserves the legacy command's trading flags without moving
-// the trader implementation into the reusable application package.
-type TraderOptions struct {
-	Mode     string
-	Schedule string
-	Capital  float64
-}
-
-type TraderStarter func(context.Context, TraderOptions, market.Service, llm.Provider, *channel.Manager)
-
-// Options contains all candidate deployment locations. Shadow candidates must
-// provide isolated store and feed paths and can only construct filefeed output.
+// Options contains the deployment locations for the news platform.
 type Options struct {
 	ConfigPath       string
 	ListenAddr       string
-	StorePath        string
-	CandidateRoot    string
-	Shadow           bool
-	ShadowFeedPath   string
-	SignalHandler    http.Handler
-	WarehouseStatus  http.Handler
-	Trading          TraderOptions
-	StartTrader      TraderStarter
 	BootstrapClosing bool
 }
 
@@ -65,13 +43,11 @@ type App struct {
 	listener net.Listener
 	server   *api.Server
 	stores   *bootstrap.Stores
-	bolt     boltSnapshotter
 	marketDB *store.MarketDB
 	router   *core.Router
 	alert    *alert.Engine
 	market   *market.CachedService
 	channels *channel.Manager
-	feed     feedSnapshotter
 	llm      llm.Provider
 	options  Options
 
@@ -81,16 +57,6 @@ type App struct {
 	alertOn    bool
 	closeOnce  sync.Once
 	closeErr   error
-}
-
-type SnapshotResult = store.SnapshotResult
-
-type boltSnapshotter interface {
-	Snapshot(context.Context, io.Writer) (store.SnapshotResult, error)
-}
-
-type feedSnapshotter interface {
-	Snapshot(context.Context, io.Writer) (store.SnapshotResult, error)
 }
 
 // New fully constructs the platform and binds its listener. A port conflict is
@@ -104,57 +70,20 @@ func New(options Options) (*App, error) {
 		return nil, fmt.Errorf("platformapp: listen address: %w", err)
 	}
 	options.ListenAddr = addr
-	if options.Shadow {
-		root, err := candidate.NewRoot(options.CandidateRoot)
-		if err != nil {
-			return nil, fmt.Errorf("platformapp: %w", err)
-		}
-		options.StorePath, err = root.RequireFile("shadow store path", options.StorePath)
-		if err != nil {
-			return nil, fmt.Errorf("platformapp: %w", err)
-		}
-		options.ShadowFeedPath, err = root.RequireFile("shadow feed path", options.ShadowFeedPath)
-		if err != nil {
-			return nil, fmt.Errorf("platformapp: %w", err)
-		}
-		if options.Trading.Mode != "" && options.Trading.Mode != "off" {
-			return nil, fmt.Errorf("platformapp: trading is forbidden in shadow mode")
-		}
-	}
 
 	cm, err := bootstrap.InitConfig(options.ConfigPath)
 	if err != nil {
 		return nil, err
 	}
 	cfg := cm.Get()
-	if options.StorePath != "" {
-		cfg.Store.Path = options.StorePath
-	}
-	if options.Shadow {
-		applyShadowConfig(cfg, options.ShadowFeedPath)
-	}
 
 	stores, err := bootstrap.InitStoreContext(context.Background(), cfg)
 	if err != nil {
 		return nil, fmt.Errorf("platformapp: init store: %w", err)
 	}
 	cleanup := func() { _ = stores.Close() }
-	boltOwner, ok := stores.Store.(boltSnapshotter)
-	if !ok {
-		cleanup()
-		return nil, fmt.Errorf("platformapp: bolt snapshot owner unavailable")
-	}
 
 	channels := bootstrap.InitChannels(cfg)
-	var feedOwner feedSnapshotter
-	fileFeeds := channels.GetByType("filefeed")
-	if len(fileFeeds) == 1 {
-		feedOwner, _ = fileFeeds[0].(feedSnapshotter)
-	}
-	if options.Shadow && feedOwner == nil {
-		cleanup()
-		return nil, fmt.Errorf("platformapp: exactly one required v1 filefeed snapshot owner is required")
-	}
 	rawLLM, enhancer := bootstrap.InitLLM(cfg)
 	var llmProvider llm.Provider
 	if rawLLM != nil {
@@ -178,11 +107,12 @@ func New(options Options) (*App, error) {
 		engine.InjectLLM(llmProvider)
 	}
 
-	var marketDB *store.MarketDB
-	if !options.Shadow {
-		marketDB = bootstrap.InitMarketDB("data/market.db")
+	marketDB := bootstrap.InitMarketDB("data/market.db")
+	alertEngine, err := bootstrap.InitAlert(cfg, stores.DB, marketService)
+	if err != nil {
+		cleanup()
+		return nil, fmt.Errorf("platformapp: init alert: %w", err)
 	}
-	alertEngine, _ := bootstrap.InitAlert(cfg, stores.DB, marketService)
 	listener, err := net.Listen("tcp", options.ListenAddr)
 	if err != nil {
 		if marketDB != nil {
@@ -194,20 +124,9 @@ func New(options Options) (*App, error) {
 
 	_, portText, _ := net.SplitHostPort(listener.Addr().String())
 	port, _ := strconv.Atoi(portText)
-	var server *api.Server
-	if options.Shadow {
-		server = api.NewReadOnlyServer(cm, port)
-	} else {
-		server = api.NewServer(cm, port)
-	}
+	server := api.NewServer(cm, port)
 	server.SetChannelManager(channels)
 	server.SetNewsEngine(engine)
-	if options.SignalHandler != nil {
-		server.Mount("/api/signals", options.SignalHandler)
-	}
-	if options.WarehouseStatus != nil {
-		server.Mount("/api/candidate/warehouse", options.WarehouseStatus)
-	}
 
 	if llmProvider != nil {
 		cm.Subscribe(func(oldCfg, newCfg *config.PlatformConfig) {
@@ -228,30 +147,13 @@ func New(options Options) (*App, error) {
 	}
 
 	return &App{
-		listener: listener, server: server, stores: stores, bolt: boltOwner, marketDB: marketDB,
-		router: router, alert: alertEngine, market: marketService, channels: channels, feed: feedOwner,
+		listener: listener, server: server, stores: stores, marketDB: marketDB,
+		router: router, alert: alertEngine, market: marketService, channels: channels,
 		llm: llmProvider, options: options,
 	}, nil
 }
 
 func (a *App) Addr() string { return a.listener.Addr().String() }
-
-// SnapshotBolt delegates to the owner of the currently open Bolt database.
-func (a *App) SnapshotBolt(ctx context.Context, w io.Writer) (SnapshotResult, error) {
-	if a == nil || a.bolt == nil {
-		return SnapshotResult{}, fmt.Errorf("platformapp: bolt snapshot owner unavailable")
-	}
-	return a.bolt.Snapshot(ctx, w)
-}
-
-// SnapshotFeed delegates to the required v1 filefeed owner retained at
-// construction time, so runtime channel disablement cannot remove the seam.
-func (a *App) SnapshotFeed(ctx context.Context, w io.Writer) (SnapshotResult, error) {
-	if a == nil || a.feed == nil {
-		return SnapshotResult{}, fmt.Errorf("platformapp: v1 filefeed snapshot owner unavailable")
-	}
-	return a.feed.Snapshot(ctx, w)
-}
 
 // Run starts children and fails the whole application if the API listener
 // fails. Cancellation drains resources in reverse construction order.
@@ -267,7 +169,7 @@ func (a *App) Run(ctx context.Context) error {
 	a.runStarted = true
 	a.runMu.Unlock()
 
-	if a.options.BootstrapClosing && !a.options.Shadow {
+	if a.options.BootstrapClosing {
 		source.BootstrapClosingScanDB(source.ClosingScanBootstrapOptions{})
 	}
 	a.routerOn = true
@@ -281,9 +183,6 @@ func (a *App) Run(ctx context.Context) error {
 			return fmt.Errorf("platformapp: start alert: %w", err)
 		}
 		a.alertOn = true
-	}
-	if a.options.StartTrader != nil && a.options.Trading.Mode != "" && a.options.Trading.Mode != "off" {
-		a.options.StartTrader(ctx, a.options.Trading, a.market, a.llm, a.channels)
 	}
 
 	serveErr := make(chan error, 1)
@@ -326,60 +225,6 @@ func (a *App) Close() error {
 		a.closeErr = errors.Join(errs...)
 	})
 	return a.closeErr
-}
-
-func applyShadowConfig(cfg *config.PlatformConfig, feedPath string) {
-	disabled := false
-	enabled := true
-	foundFileFeed := false
-	for i := range cfg.Channels {
-		ch := &cfg.Channels[i]
-		if ch.Type != "filefeed" {
-			ch.Enabled = &disabled
-			continue
-		}
-		if foundFileFeed {
-			ch.Enabled = &disabled
-			continue
-		}
-		foundFileFeed = true
-		ch.Enabled = &enabled
-		ch.Mode = "push"
-		ch.Webhook = ""
-		ch.Options = map[string]interface{}{"path": feedPath, "v2_path": feedPath + ".v2", "max_lines": 2000}
-	}
-	if !foundFileFeed {
-		cfg.Channels = append(cfg.Channels, config.ChannelConfig{
-			Name: "candidate-filefeed", Type: "filefeed", Mode: "push", Enabled: &enabled,
-			Options: map[string]interface{}{"path": feedPath, "v2_path": feedPath + ".v2", "max_lines": 2000},
-		})
-	}
-	filefeedNames := make(map[string]struct{})
-	for i := range cfg.Channels {
-		if cfg.Channels[i].Type == "filefeed" && cfg.Channels[i].IsEnabled() {
-			filefeedNames[cfg.Channels[i].Name] = struct{}{}
-		}
-	}
-	for i := range cfg.Sources {
-		var sinks []string
-		for _, sink := range cfg.Sources[i].Sinks {
-			if _, ok := filefeedNames[sink]; ok {
-				sinks = append(sinks, sink)
-			}
-		}
-		if len(sinks) == 0 {
-			for name := range filefeedNames {
-				sinks = append(sinks, name)
-				break
-			}
-		}
-		cfg.Sources[i].Sinks = sinks
-	}
-	cfg.MirrorChannels = nil
-	cfg.SourceHealth.NotifyChannels = nil
-	cfg.Alert.Enabled = false
-	cfg.LLM.APIKey = ""
-	cfg.LLM.Enhance.Enabled = false
 }
 
 func normalizeListenAddr(addr string) (string, error) {

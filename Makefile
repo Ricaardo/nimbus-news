@@ -9,7 +9,6 @@
 
 .PHONY: help init deploy build up down logs logs-backend logs-frontend restart clean clean-all \
         dev dev-backend dev-frontend status ps health backup restore update symbols python-deps \
-        smoke-longbridge nimbusctl-check
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -91,26 +90,10 @@ build:
 	@echo "$(BLUE)>>> 构建镜像...$(NC)"
 	docker compose build
 
-# 原生二进制（现网 platform + 集成 shadow candidate nimbusd）。
+# 原生二进制（现网 platform）。
 build-native:
-	@echo "$(BLUE)>>> go build platform + nimbusd + nimbusctl...$(NC)"
+	@echo "$(BLUE)>>> go build platform...$(NC)"
 	go build -o bin/platform ./cmd/platform
-	go build -o bin/nimbusd ./cmd/nimbusd
-	go build -o bin/nimbusctl ./cmd/nimbusctl
-
-nimbusctl-check:
-	@tmp_dir="$$(mktemp -d)"; \
-	trap 'rm -rf "$$tmp_dir"' EXIT; \
-	go build -o "$$tmp_dir/nimbusctl" ./cmd/nimbusctl; \
-	status_json="$$("$$tmp_dir/nimbusctl" --config config/system.yaml status)"; \
-	echo "$$status_json"; echo "$$status_json" | grep -q '"ok":true'; \
-	contracts_json="$$("$$tmp_dir/nimbusctl" --config config/system.yaml contracts check)"; \
-	echo "$$contracts_json"; echo "$$contracts_json" | grep -q '"ok":true'; \
-	set +e; preflight_json="$$("$$tmp_dir/nimbusctl" --config config/system.yaml preflight)"; preflight_code="$$?"; set -e; \
-	echo "$$preflight_json"; test "$$preflight_code" -ne 0; \
-	echo "$$preflight_json" | grep -q '"ok":false'; \
-	echo "$$preflight_json" | grep -q 'verified release is missing'; \
-	plutil -lint deploy/com.nimbus.nimbusd-candidate.plist
 
 up:
 	@echo "$(BLUE)>>> 启动服务...$(NC)"
