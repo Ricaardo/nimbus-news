@@ -81,7 +81,7 @@ crontab -l                               # 三条 cron（构建/备份/探活）
 - 常用密钥：`WECHAT_WEBHOOK_URL`（企业微信，探活告警同用）、`DISCORD_PUSH_WEBHOOK`、
   `FINNHUB_API_KEY`（earnings-calendar）、`FRED_API_KEY`（宏观报告）、LLM key
 
-数据源全览见 [SOURCES.md](SOURCES.md)。
+数据源全览见 nimbus-os 仓 `docs/references/news-sources.md`（news 仓源码为准，文档随源变更在 nimbus-os 更新）。
 
 ## 本地开发
 

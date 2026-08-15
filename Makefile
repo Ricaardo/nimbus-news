@@ -8,7 +8,7 @@
 # ============================================
 
 .PHONY: help init deploy build up down logs logs-backend logs-frontend restart clean clean-all \
-        dev dev-backend dev-frontend status ps health backup restore update symbols python-deps \
+        dev dev-backend dev-frontend status ps health backup restore update python-deps \
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -56,7 +56,6 @@ help:
 	@echo "$(GREEN)数据管理:$(NC)"
 	@echo "  make backup        - 备份数据"
 	@echo "  make restore       - 恢复数据"
-	@echo "  make symbols       - 重新生成 data/index 标的索引"
 	@echo "  make clean         - 清理（保留数据）"
 	@echo "  make clean-all     - 完全清理（包括数据）"
 	@echo ""
@@ -174,11 +173,6 @@ restore:
 	fi
 	@tar -xzvf $(FILE)
 	@echo "$(GREEN)✓ 数据已恢复$(NC)"
-
-symbols:
-	@echo "$(BLUE)>>> 生成标的索引...$(NC)"
-	@mkdir -p data/index
-	python3 scripts/fetch_symbols.py
 
 python-deps:
 	pip install -r scripts/requirements.txt
