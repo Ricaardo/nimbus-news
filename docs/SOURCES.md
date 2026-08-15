@@ -35,12 +35,6 @@ news 平台的全部数据来源、接口/RSS 链接、所需密钥与外部依�
 | futu-earnings-calendar | script | 08:00 | 当日港美股财报,**依赖 Futu OpenD** |
 | futu-econ-calendar | script | 21:00 | 明日高重要性经济事件,**依赖 Futu OpenD** |
 
-### 文件桥(filefeed,无推送)
-
-| 源名 | 说明 |
-|---|---|
-| news-feed | 写 breaking.jsonl 到数据桥(消费方:nimbus news-bridge / mcp-gateway) |
-
 ## 二、密钥(全部经 env 注入 .env,gitignored;config 里以 `${VAR}` 引用,不落盘明文)
 
 | 变量 | 用途 |
@@ -63,5 +57,4 @@ news 平台的全部数据来源、接口/RSS 链接、所需密钥与外部依�
 ## 四、接口
 
 - 平台自身:`GET /api/health`、`GET /api/news`(store 查询)、`POST /api/sources/:name/trigger`、`/metrics`(Prometheus)
-- 文件桥输出:`~/nimbus-os/nimbus/workspace/feed/`(breaking.jsonl / 13f-latest.json / ashare-candidates.json)
-- 部署:VPS `/opt/news`(systemd news-platform.service);Mac 侧仅 launchd `com.news.feed-pull` 每分钟拉取 feed 桥
+- 部署:VPS `/opt/news`(systemd news-platform.service)。nimbus 侧不依赖本平台接口,按本文档源清单直拉

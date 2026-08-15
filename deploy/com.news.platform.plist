@@ -4,13 +4,13 @@
 <!--
   com.news.platform.plist — launchd agent for the news data-source platform.
 
-  解耦背景：news 现作为纯数据源运行（推送 + news-feed 桥接），不再依赖
+  解耦背景：news 现作为纯数据源运行（推送），不再依赖
   discord bot 网关（discord-push 已在 config.platform.yaml 中 enabled:false）。
   此前 news 无任何守护，进程崩溃后静默退出（2026-06-14 因 discord 4004 崩溃后
   一直 down）。本 agent 用 KeepAlive 保证崩溃自动重启。
 
   INSTALL:
-    cp ~/nimbus-os/news/deploy/com.news.platform.plist ~/Library/LaunchAgents/
+    cp ~/nimbus-news/deploy/com.news.platform.plist ~/Library/LaunchAgents/
     launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.news.platform.plist
 
   RELOAD after rebuild (make build / go build -o bin/platform ./cmd/platform):
