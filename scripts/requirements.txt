@@ -23,6 +23,7 @@ playwright>=1.40.0     # 浏览器自动化
 
 # 2. AKShare (东方财富数据，必需)
 akshare>=1.14.0        # A股数据接口
+ecocal>=1.2.1          # econ-calendar 经济事件日历(fxstreet 日历 API,需 py>=3.10)
 
 # 3. BaoStock (免费历史K线数据，推荐)
 # 优点: 完全免费、无需注册、稳定可靠

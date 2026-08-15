@@ -454,23 +454,25 @@ sources:
         - "LABOR_GAP"
 
 
-  # 富途财报日历 —— 每日 08:00 推送当日港美股发布财报的公司(Futu OpenD)
-  - name: "futu-earnings-calendar"
+  # 财报日历 —— 每日 08:00 推送当日港美股发布财报的公司(开源数据源,无需 OpenD)
+  # 美股段:Finnhub /calendar/earnings(免费档,需 FINNHUB_API_KEY)
+  # 港股段:akshare news_report_time_baidu(百度股市通财报发行日,含港股)
+  - name: "earnings-calendar"
     type: "script"
     schedule: ["08:00"]
     sinks: ["wechat-main", "discord-webhook"]
     options:
-      command: "python3 scripts/futu_earnings_calendar.py --days 1"
+      command: "python3 scripts/earnings_calendar.py --days 1"
       timeout: 120
       push_output: true
 
-  # 富途经济事件日历 —— 每日 21:00 推送明日高重要性经济事件预告(Futu OpenD)
-  - name: "futu-econ-calendar"
+  # 经济事件日历 —— 每日 21:00 推送明日高重要性经济事件预告(ecocal,爬 investing.com)
+  - name: "econ-calendar"
     type: "script"
     schedule: ["21:00"]
     sinks: ["wechat-main", "discord-webhook"]
     options:
-      command: "python3 scripts/futu_econ_calendar.py --days 1"
+      command: "python3 scripts/econ_calendar.py --days 1"
       timeout: 120
       push_output: true
 

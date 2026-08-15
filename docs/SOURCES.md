@@ -32,8 +32,8 @@ news 平台的全部数据来源、接口/RSS 链接、所需密钥与外部依�
 | us-preview | market-briefing | 21:10 | 美股盘前预览 |
 | us-macro-report | us-macro-report | 21:30 | 宏观指标报告,**需 FRED_API_KEY** |
 | guanfu-score | guanfu | 10:00 | 观复读盘(调 ~/nimbus-os/guanfu) |
-| futu-earnings-calendar | script | 08:00 | 当日港美股财报,**依赖 Futu OpenD** |
-| futu-econ-calendar | script | 21:00 | 明日高重要性经济事件,**依赖 Futu OpenD** |
+| earnings-calendar | script | 08:00 | 当日港美股财报(美股段 Finnhub /calendar/earnings 免费档,**需 FINNHUB_API_KEY**;港股段 akshare 百度财报发行日) |
+| econ-calendar | script | 21:00 | 明日高重要性经济事件(ecocal,fxstreet 日历 API) |
 
 ## 二、密钥(全部经 env 注入 .env,gitignored;config 里以 `${VAR}` 引用,不落盘明文)
 
@@ -50,7 +50,9 @@ news 平台的全部数据来源、接口/RSS 链接、所需密钥与外部依�
 
 | 依赖 | 用途 |
 |---|---|
-| Futu OpenD(本机 127.0.0.1:11111,telnet 22222) | 财报/经济日历脚本源 + 行情 |
+| Finnhub API(免费档) | earnings-calendar 美股段(FINNHUB_API_KEY) |
+| akshare(venv) | earnings-calendar 港股段(百度财报发行日) |
+| ecocal(PyPI,fxstreet 日历 API) | econ-calendar 经济事件日历 |
 | dataplane :8800(nimbus-os 仓) | 简报/聚合源的行情与宏观数据 |
 | DeepSeek API(api.deepseek.com) | 翻译/简评/分类 |
 
