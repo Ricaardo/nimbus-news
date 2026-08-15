@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Nimbus candidate system configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "ports_registry", "candidate", "runtimes", "commands", "release", "backup"],
+  "properties": {
+    "version": {"const": 1},
+    "ports_registry": {"type": "string", "minLength": 1},
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["root", "marker", "release_dir", "evidence_dir", "backup_dir", "restore_dir"],
+      "properties": {
+        "root": {"type": "string"}, "marker": {"const": ".nimbus-candidate-root"},
+        "release_dir": {"const": "releases"}, "evidence_dir": {"const": "evidence"},
+        "backup_dir": {"const": "backups"}, "restore_dir": {"const": "restores"}
+      }
+    },
+    "runtimes": {"type": "object", "additionalProperties": {"$ref": "#/$defs/runtime"}},
+    "commands": {"type": "object", "additionalProperties": {"$ref": "#/$defs/command"}},
+    "release": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_file_bytes", "include", "exclude"],
+      "properties": {
+        "max_file_bytes": {"type": "integer", "minimum": 1},
+        "include": {"type": "array", "items": {"type": "string"}},
+        "exclude": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "backup": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_objects"],
+      "properties": {
+        "required_objects": {
+          "type": "array", "minItems": 4, "maxItems": 4,
+          "allOf": [
+            {"contains": {"type": "object", "required": ["name", "kind"], "properties": {"name": {"const": "news"}, "kind": {"const": "bolt"}}}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "required": ["name", "kind"], "properties": {"name": {"const": "control"}, "kind": {"const": "sqlite"}}}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "required": ["name", "kind"], "properties": {"name": {"const": "signals"}, "kind": {"const": "jsonl"}}}, "minContains": 1, "maxContains": 1},
+            {"contains": {"type": "object", "required": ["name", "kind"], "properties": {"name": {"const": "shadow_feed"}, "kind": {"const": "rolling_jsonl"}}}, "minContains": 1, "maxContains": 1}
+          ],
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["name", "kind", "path"],
+            "properties": {
+              "name": {"enum": ["news", "control", "signals", "shadow_feed"]},
+              "kind": {"enum": ["sqlite", "bolt", "jsonl", "rolling_jsonl"]},
+              "path": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "command": {"type": "object", "additionalProperties": false, "required": ["argv"], "properties": {"argv": {"type": "array", "items": {"type": "string"}}}},
+    "runtime": {"type": "object", "additionalProperties": false, "required": ["enabled", "argv"], "properties": {"enabled": {"type": "boolean"}, "argv": {"type": "array", "items": {"type": "string"}}}}
+  }
+}

@@ -1,0 +1,65 @@
+# ============================================
+# 投资信息平台 - 统一部署配置
+# ============================================
+# 使用方式:
+#   首次部署:     make init && make deploy
+#   仅启动:       docker compose up -d
+#   查看日志:     docker compose logs -f
+#   停止服务:     docker compose down
+# ============================================
+
+services:
+  # ==========================================
+  # 后端服务 (Go)
+  # ==========================================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: news-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${BACKEND_API_PORT:-8081}:8081"
+      - "${WEBHOOK_PORT:-8080}:8080"
+      - "${WXOFFICIAL_PORT:-8082}:8082"
+    networks:
+      - news-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ==========================================
+  # 前端服务 (Vue + Nginx)
+  # ==========================================
+  frontend:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: news-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - news-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  news-network:
+    driver: bridge

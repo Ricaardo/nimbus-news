@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.news.platform.plist — launchd agent for the news data-source platform.
+
+  解耦背景：news 现作为纯数据源运行（推送 + news-feed 桥接），不再依赖
+  discord bot 网关（discord-push 已在 config.platform.yaml 中 enabled:false）。
+  此前 news 无任何守护，进程崩溃后静默退出（2026-06-14 因 discord 4004 崩溃后
+  一直 down）。本 agent 用 KeepAlive 保证崩溃自动重启。
+
+  INSTALL:
+    cp ~/nimbus-os/news/deploy/com.news.platform.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.news.platform.plist
+
+  RELOAD after rebuild (make build / go build -o bin/platform ./cmd/platform):
+    launchctl kickstart -k gui/$(id -u)/com.news.platform
+
+  UNLOAD:
+    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.news.platform.plist
+
+  NOTE: launch-platform.sh 自行加载 .env（含 LLM/feishu/wechat/webhook 密钥），
+        EnvironmentVariables 故意不放任何密钥。
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.news.platform</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/x/nimbus-os/news/bin/launch-platform.sh</string>
+  </array>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+
+  <key>StandardOutPath</key>
+  <string>/Users/x/nimbus-os/news/logs/platform.out.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/Users/x/nimbus-os/news/logs/platform.err.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/x/nimbus-os/news</string>
+</dict>
+</plist>

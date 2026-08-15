@@ -1,0 +1,65 @@
+# Compiled binary
+/platform
+/main
+news-platform
+bin/
+
+# Data files
+/data/
+/cache/*.json
+/cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.claude/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment & Secrets
+.env
+.env.local
+.env.*.local
+
+# Config with secrets (use .example instead)
+config.platform.yaml
+config.yaml
+config.*.yaml
+!config.*.yaml.example
+
+# Logs
+*.log
+
+# Test coverage
+coverage.out
+coverage.html
+
+# Frontend
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Generated reports (should not be in git)
+debug_messages.json
+quant_signal_test_result.json
+
+# Script runtime cache/state
+scripts/.fedwatch_zq_cache.json
+
+# Temporary files
+*.tmp
+*.temp
+*.swp

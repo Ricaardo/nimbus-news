@@ -1,0 +1,454 @@
+# 统一投资信息平台配置
+# Unified Investment Platform Configuration
+
+server:
+  name: "investment-platform"
+  port: 8080
+
+# 渠道配置 (推送 + 接收)
+channels:
+  # 飞书群推送 - 仅推送新闻到群
+  - name: "feishu-push"
+    type: "feishu"
+    mode: "push"
+    enabled: false  # 暂时关闭
+    webhook: "${FEISHU_PUSH_WEBHOOK}"
+
+  # 飞书交互机器人 - 双向交互（需要配置应用凭证）
+  - name: "feishu-bot"
+    type: "feishu"
+    mode: "bidirectional"
+    enabled: false
+    # ⚠️ 即使是 bot 模式，对外发消息(如健康告警)也走顶层 webhook(飞书自定义机器人)。
+    # 缺这行 → "feishu-bot cannot send or no webhook configured"，源挂了也没人知道。
+    webhook: "${FEISHU_WEBHOOK}"
+    options:
+      app_id: "${FEISHU_APP_ID}"
+      app_secret: "${FEISHU_APP_SECRET}"
+      encrypt_key: "${FEISHU_ENCRYPT_KEY}"
+      verification_token: "${FEISHU_VERIFICATION_TOKEN}"
+
+  # 企业微信 - 推送
+  - name: "wechat-main"
+    type: "wechat"
+    mode: "push"
+    enabled: false
+    webhook: "${WECHAT_WEBHOOK_URL}"
+
+  # 微信公众号 - 双向交互 + 主动推送
+  - name: "wxofficial-bot"
+    type: "wxofficial"
+    mode: "bidirectional"
+    enabled: false
+    options:
+      app_id: "${WXOFFICIAL_APP_ID}"
+      app_secret: "${WXOFFICIAL_APP_SECRET}"
+      token: "${WXOFFICIAL_TOKEN}"
+      encoding_aes_key: ""
+      template_id: ""
+      port: 8082
+
+  # Telegram - 双向
+  - name: "telegram-main"
+    type: "telegram"
+    mode: "bidirectional"
+    enabled: false
+    options:
+      bot_token: "${TELEGRAM_BOT_TOKEN}"
+      chat_id: "${TELEGRAM_CHAT_ID}"
+
+  # Discord - 推送渠道 (webhook)
+  - name: "discord-push"
+    type: "discord"
+    mode: "push"
+    enabled: false
+    webhook: "${DISCORD_PUSH_WEBHOOK}"
+    options:
+      thread_id: "1457727272466387030"
+      thread_pool_enabled: true
+      thread_ttl: 86400  # 24 小时
+
+      thread_mappings:
+        "🐘 Trump News": ["trump-rss"]
+        "💰 财经新闻": ["bwe-tradfi", "kobeissi"]
+        "🪙 加密快讯": ["bwenews-ws"]
+        "📈 Finnhub 股市": ["finnhub-market"]
+        "🥇 贵金属": ["kitco-precious"]
+        "🔭 观复盘面": ["guanfu-score"]
+        "📊 行情速览": ["market-summary"]
+        "🌅 早盘扫描": ["a-morning-scan"]
+        "🎯 尾盘打板": ["a-closing-scan"]
+        "🔄 T+1 卖出": ["a-closing-followup"]
+        "⚡ 盘中异动": ["a-intraday-breakout"]
+        "🔥 涨停梯队": ["a-limit-up-ladder"]
+        "💼 大宗交易": ["a-block-trade"]
+        "🌐 隔夜触发": ["a-overseas-trigger"]
+        "📊 A股复盘": ["a-evening-report"]
+        "📅 周度日历": ["weekly-calendar"]
+        "🌎 美国宏观": ["us-macro-report"]
+
+      thread_dedup:
+        enabled: true
+        window_minutes: 60
+        threshold: 0.7
+
+  # Discord - 双向交互机器人
+  - name: "discord-bot"
+    type: "discord"
+    mode: "bidirectional"
+    enabled: false
+    options:
+      bot_token: "${DISCORD_BOT_TOKEN}"
+
+  # Discord - 多 webhook 轮询推送（普通文本频道，分散规避频控）
+  - name: "discord-webhook"
+    type: "discord"
+    mode: "push"
+    enabled: false
+    options:
+      webhook_plain: true      # 普通文本频道，不创建 forum thread
+      webhooks:                # 轮询分散，规避单 webhook 频控
+        - "${DISCORD_WEBHOOK_1}"
+        - "${DISCORD_WEBHOOK_2}"
+        - "${DISCORD_WEBHOOK_3}"
+
+  # 个人微信小号 - 双向交互
+  - name: "wxpersonal-bot"
+    type: "wxpersonal"
+    mode: "bidirectional"
+    enabled: false
+    options:
+      storage_path: "data/wxpersonal_storage.json"
+
+# 新闻源配置
+sources:
+  # ──────────────── 实时新闻源 ────────────────
+
+  - name: "trump-rss"
+    type: "rss"
+    url: "https://trumpstruth.org/feed"
+    interval: 60
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      max_age_hours: 12
+
+  - name: "bwe-tradfi"
+    type: "rss"
+    url: "https://ch2rss.fflow.net/BWEtradfi"
+    interval: 90
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      max_age_hours: 12
+
+  - name: "kobeissi"
+    type: "rss"
+    url: "https://ch2rss.fflow.net/TheKobeissiLetter"
+    interval: 180
+    sinks: ["discord-push"]
+    options:
+      max_age_hours: 12
+
+  - name: "kitco-precious"
+    type: "rss"
+    url: "https://news.kitco.com/rss/kitconewsfeed.xml"
+    interval: 600
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      max_age_hours: 24
+      require_keywords:
+        - "price"
+        - "forecast"
+        - "outlook"
+        - "central bank"
+        - "ETF"
+        - "Fed"
+        - "inflation"
+        - "rally"
+        - "drop"
+        - "gold"
+        - "silver"
+
+  - name: "bwenews-ws"
+    type: "bwenews-ws"
+    interval: 15
+    sinks: ["wechat-main", "discord-push"]
+
+  # Finnhub — 美股公司新闻 + 市场新闻
+  # 免费 60 次/min, skip_market=true 时只拉公司新闻
+  - name: "finnhub-market"
+    type: "finnhub"
+    interval: 300
+    sinks: ["discord-push"]
+    options:
+      api_key: "${FINNHUB_API_KEY}"
+      category: "general"
+      skip_market: true
+      max_per_fetch: 20
+      symbols: ["NVDA", "TSLA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "SMCI", "PLTR"]
+
+  # ──────────────── 定时快照 ────────────────
+
+  # BTC 盘面 10:00 (discord-only, 避免占用 wechat 带宽)
+  - name: "guanfu-score"
+    type: "guanfu"
+    schedule: ["10:00"]
+    sinks: ["discord-push"]
+
+  - name: "market-summary"
+    type: "market-summary"
+    schedule: ["09:25", "11:35", "14:55", "21:30", "23:30"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      symbols: ["BTCUSDT", "ETHUSDT", "^GSPC", "^IXIC", "GC=F", "SI=F", "GLD", "SLV", "000001.SS"]
+      forex_pairs: ["USD/CNY", "USDT/CNY", "EUR/CNY", "HKD/CNY"]
+
+  # ──────────────── A 股聚合报告 ────────────────
+
+  # 09:00 早盘暴涨候选扫描
+  - name: "a-morning-scan"
+    type: "morning-scan"
+    schedule: ["09:00"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      top: 10
+      finnhub_api_key: "${FINNHUB_API_KEY}"  # 可选, 用于拉美股催化剂新闻
+
+  # 14:45 尾盘打板 + 次日预测 (需要先跑 closing_scan_backfill.py --days 60)
+  - name: "a-closing-scan"
+    type: "closing-scan"
+    schedule: ["14:45"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      top: 10
+
+  # 09:30 尾盘候选 T+1 卖出建议 (F1 闭环: 读昨日 closing-scan 推荐股, 查今日开盘给建议)
+  - name: "a-closing-followup"
+    type: "closing-scan-followup"
+    schedule: ["09:30"]
+    sinks: ["wechat-main", "discord-push"]
+
+  # 盘中异动扫描 10:30 (仅一次, 避免和涨停梯队/尾盘扫描重合)
+  - name: "a-intraday-breakout"
+    type: "intraday-breakout"
+    schedule: ["10:30"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      top: 15
+      min_volume_ratio: 2.0
+
+  # 涨停梯队监控 13:30 (午后情绪检查, 只在 5+ 板/强接力/炸板警报触发)
+  - name: "a-limit-up-ladder"
+    type: "limit-up-ladder"
+    schedule: ["13:30"]
+    sinks: ["wechat-main", "discord-push"]
+
+  # 大宗交易异动 18:30 盘后 (akshare 完整数据通常在 18:00 后)
+  - name: "a-block-trade"
+    type: "block-trade"
+    schedule: ["18:30"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      threshold: 3.0
+      min_amount: 1.0
+
+  # 隔夜美股触发 A 股板块关注 08:45 盘前 (阈值 ±5% 避免重合 morning-scan)
+  - name: "a-overseas-trigger"
+    type: "overseas-trigger"
+    schedule: ["08:45"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      threshold: 5.0
+
+  # 15:30 收盘复盘
+  - name: "a-evening-report"
+    type: "evening-report"
+    schedule: ["15:30"]
+    sinks: ["wechat-main", "discord-push"]
+
+  # 周度日历 — 周日 21:00 (仅周日推送, 源内按 Weekday 过滤)
+  - name: "weekly-calendar"
+    type: "weekly-calendar"
+    schedule: ["21:00"]
+    sinks: ["wechat-main", "discord-push"]
+
+  # ──────────────── 美股 / 宏观 ────────────────
+
+  # 21:30 美国宏观 + 流动性 (FRED + SPY/QQQ/VIX)
+  - name: "us-macro-report"
+    type: "us-macro-report"
+    schedule: ["21:30"]
+    sinks: ["wechat-main", "discord-push"]
+    options:
+      api_key: "${FRED_API_KEY}"
+      series:
+        - "DFF"
+        - "SOFR"
+        - "DGS2"
+        - "DGS10"
+        - "DGS30"
+        - "M2SL"
+        - "WALCL"
+        - "RRPONTSYD"
+        - "TOTRESNS"
+        - "T10Y2Y"
+        - "T10Y3M"
+        - "UNRATE"
+        - "CPIAUCSL"
+        - "PCEPI"
+
+  # ──────────────── 每日增量任务 ────────────────
+
+  # 每日 16:00 回灌当日涨停表现到 closing_scan.db
+  - name: "closing-scan-backfill"
+    type: "script"
+    schedule: ["16:00"]
+    sinks: []
+    options:
+      command: "python3 scripts/closing_scan_backfill.py --days 2 --json-only"
+      push_output: false
+
+# 行情数据源
+market:
+  default: "yahoo"
+  providers:
+    - name: "yahoo"
+      type: "yahoo"
+  smart_cache:
+    enabled: true
+    trading_ttl: 30
+    closed_ttl: 600
+    pre_market_ttl: 120
+    after_hours_ttl: 120
+    crypto_ttl: 30
+    cache_size: 2000
+
+# LLM 配置
+llm:
+  provider: "minimax"
+  api_url: "https://api.minimax.com/anthropic"
+  api_key: "${MINIMAX_API_KEY}"
+  model: "MiniMax-M2.5"
+  heavy_model: "MiniMax-M2.5"
+  thinking_mode: "thinking"
+  enhance:
+    enabled: true
+    max_per_hour: 20
+
+# 过滤器配置
+filters:
+  content:
+    enabled: true
+    min_content_length: 15
+    block_keywords:
+      - "(?i)^https?://"
+      - "(?i)^(rt|retweet)\\s*[@:]"
+      - "(?i)\\[video\\]"
+      - "(?i)\\[image\\]"
+      - "(?i)^watch\\s*:?\\s*https?://"
+      - "(?i)^live\\s*:?\\s*https?://"
+      - "(?i)^🔴\\s*(live|breaking)\\s*$"
+      - "(?i)^pic\\.twitter\\.com"
+    strict_sources:
+      - "trump-rss"
+
+  dedup:
+    enabled: true
+    ttl: 86400
+    groups:
+      - ["bwe-tradfi", "kobeissi"]
+    semantic:
+      enabled: true
+      threshold: 0.6
+      time_window: 3600
+      cache_size: 1000
+
+  ratelimit:
+    enabled: true
+    rules:
+      # 渠道全局上限
+      - source: "*"
+        sink: "wechat-main"
+        max_per_minute: 100
+
+      - source: "*"
+        sink: "discord-push"
+        max_per_minute: 5
+
+      # 聚合报告源（每天几次，不需要严格限流）
+      - source: "a-morning-scan"
+        sink: "*"
+        max_per_minute: 10
+
+      - source: "a-closing-scan"
+        sink: "*"
+        max_per_minute: 10
+
+      - source: "a-evening-report"
+        sink: "*"
+        max_per_minute: 10
+
+      - source: "us-macro-report"
+        sink: "*"
+        max_per_minute: 10
+
+      - source: "weekly-calendar"
+        sink: "*"
+        max_per_minute: 10
+
+      # 定时快照
+      - source: "market-summary"
+        sink: "*"
+        max_per_minute: 20
+
+      - source: "guanfu-score"
+        sink: "*"
+        max_per_minute: 10
+
+      # Finnhub 免费 60/min, 限制防止吃光
+      - source: "finnhub-market"
+        sink: "*"
+        max_per_minute: 10
+
+      # 兜底
+      - source: "*"
+        sink: "*"
+        max_per_minute: 100
+
+  ai_filter:
+    enabled: true
+    threshold_score: 6.0
+    max_per_minute: 10
+    block_categories:
+      - "无价值"
+      - "无关"
+    target_sources:
+      - "trump-rss"
+      - "bwe-tradfi"
+      - "kobeissi"
+      - "kitco-precious"
+      - "finnhub-market"
+
+source_health:
+  enabled: true
+  degraded_threshold: 3
+  unhealthy_threshold: 5
+  recovery_interval: 300
+  # 源健康告警渠道。主推一个「实测可达、你每天会看」的渠道(这里用企业微信 wechat-main)，
+  # feishu-bot 接好 webhook 后作冗余。切忌只配一个没接 webhook 的渠道——否则源挂了告警
+  # 会全部静默失败(踩过坑：market-summary 连挂一整天无人知)。
+  notify_channels:
+    - "wechat-main"
+    - "feishu-bot"
+
+alert:
+  enabled: true
+  check_interval: 30
+  max_alerts_per_user: 50
+  default_cooldown: 300
+
+store:
+  type: "bolt"
+  path: "data/platform.db"
+  news:
+    max_items: 1000
+    ttl: 604800

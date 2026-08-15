@@ -1,0 +1,46 @@
+# Go 构建缓存
+/go
+/bin
+/pkg
+*.exe
+*.test
+*.out
+
+# 日志和临时文件
+*.log
+*.tmp
+*.swp
+
+# 本地配置（不要打包到镜像中）
+config.yaml
+config.platform.yaml
+.env
+.env.*
+!.env.example
+
+# 数据目录
+/data
+/backups
+
+# Git
+.git
+.gitignore
+
+# IDE
+.claude
+.idea
+.vscode
+*.sublime-*
+
+# 前端（单独构建）
+/web
+
+# 文档
+*.md
+!README.md
+LICENSE
+
+# 构建产物
+main
+platform
+news-platform

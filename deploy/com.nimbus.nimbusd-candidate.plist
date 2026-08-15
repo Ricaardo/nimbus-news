@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.nimbus.nimbusd-candidate</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/x/nimbus-os/news/bin/nimbusd</string>
+    <string>--system-config</string><string>/Users/x/nimbus-os/news/config/system.yaml</string>
+    <string>--config</string><string>/Users/x/nimbus-os/news/config.platform.yaml</string>
+    <string>--candidate-root</string><string>/Users/x/nimbus-os/news/data/nimbusd-candidate</string>
+    <string>--news-addr</string><string>127.0.0.1:19081</string>
+    <string>--news-store</string><string>/Users/x/nimbus-os/news/data/nimbusd-candidate/news.db</string>
+    <string>--shadow-feed</string><string>/Users/x/nimbus-os/news/data/nimbusd-candidate/feed/shadow.jsonl</string>
+    <string>--signal-store</string><string>/Users/x/nimbus-os/news/data/nimbusd-candidate/signals/events.jsonl</string>
+    <string>--data-addr</string><string>127.0.0.1:19082</string>
+    <string>--dataplane-addr</string><string>127.0.0.1:19083</string>
+    <string>--control-db</string><string>/Users/x/nimbus-os/news/data/nimbusd-candidate/control.db</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/x/nimbus-os/news</string>
+  <key>RunAtLoad</key>
+  <false/>
+  <key>KeepAlive</key>
+  <false/>
+  <key>ProcessType</key>
+  <string>Background</string>
+  <key>StandardOutPath</key>
+  <string>/Users/x/nimbus-os/news/data/nimbusd-candidate/log/nimbusd.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/x/nimbus-os/news/data/nimbusd-candidate/log/nimbusd.err.log</string>
+</dict>
+</plist>

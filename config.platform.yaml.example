@@ -1,0 +1,623 @@
+# 统一投资信息平台配置
+
+server:
+  name: "investment-platform"
+  port: 8081
+
+store:
+  type: "bolt"
+  path: "data/platform.db"
+  news:
+    max_items: 1000
+    ttl: 604800
+
+# ── Channels ──────────────────────────────────────────────────────────────────
+
+# 全量镜像：把所有通过过滤的新闻额外推一份到这些渠道。
+# 留空 [] 关闭镜像。
+mirror_channels: []
+
+channels:
+  - name: "feishu-bot"
+    type: "feishu"
+    mode: "push"
+    enabled: true
+    # ⚠️ push 模式发消息走顶层 webhook(飞书自定义机器人)。此前缺这行 → 健康告警
+    # 每次 "feishu-bot cannot send or no webhook configured"，源挂了也没人知道。
+    webhook: "${FEISHU_WEBHOOK}"
+    options:
+      app_id: "${FEISHU_APP_ID}"
+      app_secret: "${FEISHU_APP_SECRET}"
+      encrypt_key: "${FEISHU_ENCRYPT_KEY}"
+      verification_token: "${FEISHU_VERIFICATION_TOKEN}"
+
+  - name: "wechat-main"
+    type: "wechat"
+    mode: "push"
+    webhook: "${WECHAT_WEBHOOK}"
+
+  # discord-push（bot 网关 → forum 频道）已于 2026-06 解耦后彻底移除：
+  # discord bot 由 nimbus 独占，news 仅经 discord-webhook 推普通文本频道。
+  # 独立 webhook 推送渠道：3 个 webhook 轮询分散，规避 Discord 单 webhook 频控。
+  # 普通文本频道（webhook_plain），不创建 forum thread。
+  # 需在对应 source 的 sinks 中加入 "discord-webhook" 才会收到消息。
+  - name: "discord-webhook"
+    type: "discord"
+    mode: "push"
+    webhook: "${DISCORD_PUSH_WEBHOOK}"
+    options:
+      webhook_plain: true
+      webhooks:
+        - "${DISCORD_WEBHOOK_1}"
+        - "${DISCORD_WEBHOOK_2}"
+        - "${DISCORD_WEBHOOK_3}"
+
+  # news→nimbus 数据桥：实时新闻追加为 JSONL，nimbus 的 news-bridge skill 读取
+  - name: "news-feed"
+    type: "filefeed"
+    mode: "push"
+    options:
+      path: "~/nimbus-os/nimbus/workspace/feed/breaking.jsonl"
+      v2_path: "~/nimbus-os/nimbus/workspace/feed/breaking.v2.jsonl"
+      max_lines: 2000
+
+# ── Sources ───────────────────────────────────────────────────────────────────
+
+sources:
+  # ── 实时 ──
+
+  # bwenews-live 已移除（2026-07-18）：公共 WS 端口已死（11.5 天仅 3 条，683 次重连失败刷日志），
+  # BWE 内容由 bwenews-rss 覆盖。
+
+  - name: "trump-rss"
+    type: "rss"
+    url: "https://trump.fm/rss/analysis.xml"   # Analysis feed: 链接指向AI分析页
+    interval: 300
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "tariff"
+        - "sanctions"
+        - "executive order"
+        - "regulation"
+        - "cabinet"
+        - "Treasury Secretary"
+        - "Commerce Secretary"
+        - "Fed Chair"
+        - "SEC Chair"
+        - "关税"
+        - "制裁"
+        - "行政命令"
+        - "监管"
+        - "内阁"
+      direct: {min_score: 8.5, max_per_day: 4, priority: 80}
+      digest: {min_score: 6.5, max_per_day: 2, priority: 40, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 2
+      exclude_video_only: true
+      exclude_reposts: true
+      fetch_linked_body: true               # 抓取分析页正文
+      linked_body_append: true             # 追加而非替换原文
+      linked_body_hosts: ["trump.fm"]
+      linked_body_max_chars: 800            # 只要摘要+fact check结论
+      tags: ["政治", "政策"]
+      exclude_keywords:
+        - "Rally"
+        - "rally"
+        - "holds hands"
+        - "toddler"
+        - "Pee-wee"
+        - "emotional tribute"
+        - "communist"
+        - "Ga. S"
+        - "blasts"
+        - "mocks"
+        - "Great Honor to endorse"
+        - "basketball player"
+        - "GREAT new song"
+        - "Inauguration on January"
+
+  # 2026-07-18 修复：feed 无 <guid> 导致全部条目同 ID 被去重误杀，ID 改为 GUID→Link 回退。
+  - name: "bwe-tradfi"
+    type: "rss"
+    url: "https://ch2rss.fflow.net/BWEtradfi"
+    interval: 60
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "rate decision"
+        - "interest rate decision"
+        - "emergency intervention"
+        - "currency intervention"
+        - "sanctions"
+        - "war escalation"
+        - "trading halt"
+        - "market halt"
+        - "default"
+        - "央行决定"
+        - "紧急干预"
+        - "制裁"
+        - "战争升级"
+        - "停牌"
+        - "违约"
+      direct: {min_score: 8.5, max_per_day: 8, priority: 70}
+      digest: {min_score: 7, max_per_day: 3, priority: 30, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 1
+      tags: ["机构", "对冲基金", "TradFi"]
+
+  # Kobeissi Letter —— 数据驱动宏观分析，与 bwe-tradfi 互补（bwe=突发标题, Kobeissi=量化背景）
+  # 恢复理由: 韩国杠杆爆仓、SA 杠杆分析、对冲基金 flow、ETF 去杠杆等独有深度内容
+  - name: "kobeissi-letter"
+    type: "rss"
+    url: "https://ch2rss.fflow.net/TheKobeissiLetter"
+    interval: 300  # 分析型，不需要高频
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "liquidity crisis"
+        - "liquidity shock"
+        - "circuit breaker"
+        - "trading halt"
+        - "largest inflow"
+        - "largest outflow"
+        - "record inflow"
+        - "record outflow"
+        - "极端流动性"
+        - "熔断"
+        - "历史最大资金流"
+      direct: {min_score: 9, max_per_day: 2, priority: 60}
+      digest: {min_score: 7, max_per_day: 3, priority: 40, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 2
+      tags: ["宏观", "市场", "分析"]
+
+  # MMS News 已移除（2026-06）：ch2rss 代理冻结，最新条目停在 5/27，线上 0 条 / 213 轮，
+  # 被 HealthMonitor 反复标记 unhealthy；且为山寨/meme 加密噪音，与 bwenews-live 仅留 BTC/HYPE 的策略相悖。
+
+  # finnhub-market 已移除（2026-07-18）：用户决定彻底废弃 finnhub 源。
+  # bwenews-rss 已移除（2026-07-18）：rss-public.bwe-ws.com 上游持续滞后（~38h），每日 5 条且多为
+  # 保留 bwe-tradfi（ch2rss）作为 BWE 系出活的唯一通道。
+
+  # - name: "tree-of-alpha"
+  #   type: "tree-of-alpha"
+  #   interval: 180
+  #   sinks: ["wechat-main", "discord-webhook"]
+  #   options:
+  #     max_age_hours: 6
+  #     max_per_fetch: 10
+  #     exclude_crypto: true
+
+  # Fed 官方新闻 —— 直连官方 RSS 已恢复可用（TLS 问题已消失，2026-07-18 verified）；
+  # 此前切到 Google News 限定 federalreserve.gov 检索，实测混入研究论文/OIG 审计等噪音，故切回官方源。
+  # Fed 官员讲话 —— 宏观信号缺口(2026-08-02 新增):Jefferson/Cook/Bowman/Barr/Waller
+  - name: "fed-speeches"
+    type: "rss"
+    url: "https://www.federalreserve.gov/feeds/speeches.xml"
+    interval: 900
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      digest: {min_score: 8, max_per_day: 2, priority: 40, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 12
+      fetch_linked_body: false
+
+  - name: "fed-press"
+    type: "rss"
+    url: "https://www.federalreserve.gov/feeds/press_all.xml"
+    interval: 900
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      critical: true
+      ai_policy: bypass
+      on_ai_failure: silent
+      direct: {max_per_day: 0, priority: 100}
+      default: silent
+    options:
+      max_age_hours: 12
+      fetch_linked_body: true
+      linked_body_hosts:
+        - "www.federalreserve.gov"
+        - "federalreserve.gov"
+      linked_body_max_chars: 12000
+      require_keywords:
+        - "FOMC"
+        - "monetary"
+        - "interest rate"
+        - "Minutes"
+        - "projections"
+        - "testimony"
+        - "discount rate"
+      tags: ["央行", "货币政策", "Fed"]
+
+  # Bloomberg 官方 RSS；仅进入美盘前瞻 digest，不抓取文章正文。
+  - name: "bloomberg-markets"
+    type: "rss"
+    url: "https://www.bloomberg.com/feeds/markets/news.rss"
+    interval: 300
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      digest: {min_score: 8.5, max_per_day: 3, priority: 50, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 6
+      fetch_linked_body: false
+      exclude_link_patterns:
+        - "/videos/"
+        - "/live/"
+        - "/newsletters/"
+        - "/podcasts/"
+      tags: ["市场", "并购", "Bloomberg"]
+
+  - name: "bloomberg-economics"
+    type: "rss"
+    url: "https://www.bloomberg.com/feeds/economics/news.rss"
+    interval: 300
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      digest: {min_score: 8.5, max_per_day: 2, priority: 50, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 6
+      fetch_linked_body: false
+      exclude_link_patterns:
+        - "/videos/"
+        - "/live/"
+        - "/newsletters/"
+        - "/podcasts/"
+      tags: ["宏观", "经济", "Bloomberg"]
+
+  # Bloomberg Politics —— 全球政策/地缘（2026-08-02 新增,公开 RSS 实测可用,最新 ~30min）。
+  # 事件噪音大：critical 关键词直推(受配额),其余仅高分进美盘前瞻。
+  - name: "bloomberg-politics"
+    type: "rss"
+    url: "https://www.bloomberg.com/feeds/politics/news.rss"
+    interval: 300
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "tariff"
+        - "sanctions"
+        - "executive order"
+        - "regulation"
+        - "debt ceiling"
+        - "government shutdown"
+        - "Fed Chair"
+        - "Treasury Secretary"
+        - "SEC Chair"
+        - "关税"
+        - "制裁"
+        - "债务上限"
+        - "政府停摆"
+      direct: {min_score: 8.5, max_per_day: 3, priority: 60}
+      digest: {min_score: 8.5, max_per_day: 2, priority: 40, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 6
+      fetch_linked_body: false
+      exclude_link_patterns:
+        - "/videos/"
+        - "/live/"
+        - "/newsletters/"
+        - "/podcasts/"
+      tags: ["政治", "政策", "Bloomberg"]
+
+  # ForexLive（investingLive 前身）突发快讯 —— 投行级宏观快讯：经济数据 vs 预期、地缘事件
+  - name: "forexlive-breaking"
+    type: "rss"
+    url: "https://investinglive.com/feed/news"
+    interval: 120  # 突发快讯，越快越好
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "rate decision"
+        - "interest rate decision"
+        - "central bank decision"
+        - "intervention"
+        - "央行决定"
+        - "干预"
+      direct: {min_score: 8, max_per_day: 8, priority: 70}
+      digest: {min_score: 6.5, max_per_day: 3, priority: 30, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 1
+      tags: ["外汇", "宏观", "快讯"]
+
+  # EIA Today in Energy —— 美国能源官方(2026-08-02 新增,实测 200):
+  # 能源政策/页岩/LNG/石油储备,配合周度库存数据(WIP 周三 22:30 北京时间)。
+  - name: "eia-energy"
+    type: "rss"
+    url: "https://www.eia.gov/rss/todayinenergy.xml"
+    interval: 600
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      digest: {min_score: 7.5, max_per_day: 2, priority: 30, briefing_target: news_aggregate}
+      default: silent
+    options:
+      max_age_hours: 12
+      fetch_linked_body: false
+      tags: ["能源", "宏观", "原油"]
+
+  # Energy Connects —— 已删除 (2026-08-02)：内容被其他源覆盖(能源地缘由
+  # forexlive/bwe 承担),长期 enabled: false 死配置,代码一并清理。
+  # Hellenic Shipping News —— 已关闭 (2026-07-31)
+  # 理由: 48h 抓取 3,184 条，AI 拦截率 1.6%，80% 为航运业合规/安全/船舶回收等非交易噪音。
+
+  # WSJ Markets 已移除（2026-06）：feeds.a.dj.com 公共 RSS 停更，feed 冻结在 2025-01-27，
+  # Serenity 占位 stub 一并移除：从未配置 SERENITY_RSS_URL，长期 enabled: false 死配置。
+
+  # ── 定时快照 ──
+
+  - name: "guanfu-score"
+    type: "guanfu"
+    schedule: ["10:00"]
+    sinks: ["wechat-main", "discord-webhook"]
+
+  # ── A 股 ──
+
+
+# ── 简报汇总（基于市场简报源聚合推送,2026-07-18 重构）──
+
+  - name: "pre-market-briefing"
+    type: "market-briefing"
+    schedule: ["09:15", "11:35", "13:05", "15:00"]  # 4时段推送:盘前全景/上午收盘/午后开盘/收盘行情
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      briefing_type: "pre_market"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+      timeout: 180
+
+  - name: "closing-briefing"
+    type: "market-briefing"
+    schedule: ["16:10"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      briefing_type: "closing"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+      timeout: 300
+
+  - name: "us-preview"
+    type: "market-briefing"
+    schedule: ["21:10"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      briefing_type: "us_preview"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+      timeout: 180
+      nasdaq_calendar: true
+
+  # a-closing-scan 已移除(2026-07-18): 内容合并至 closing-briefing
+  # a-morning-followup 已移除(2026-07-18): 内容合并至 closing-briefing
+
+#   # a-evening-report 已移除(2026-07-18): 内容合并至 closing-briefing
+
+  # ── 美股/宏观 ──
+
+  - name: "us-macro-report"
+    type: "us-macro-report"
+    schedule: ["21:30"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      api_key: "${FRED_API_KEY}"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+      series:
+        - "DFF"
+        - "SOFR"
+        - "DGS2"
+        - "DGS10"
+        - "DGS30"
+        - "M2SL"
+        - "WALCL"
+        - "RRPONTSYD"
+        - "TOTRESNS"
+        - "T10Y2Y"
+        - "T10Y3M"
+        - "UNRATE"
+        - "CPIAUCSL"
+        - "PCEPI"
+        - "DTWEXBGS"
+        - "VIXCLS"
+        - "BAA10Y"
+        - "T10YIE"
+        - "DCOILWTICO"
+        - "BUFFETT_INDEX"
+        - "CPILFESL"
+        - "PCEPILFE"
+        - "RSXFS"
+        - "ICSA"
+        - "LABOR_GAP"
+
+
+  # 富途财报日历 —— 每日 08:00 推送当日港美股发布财报的公司(Futu OpenD)
+  - name: "futu-earnings-calendar"
+    type: "script"
+    schedule: ["08:00"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      command: "python3 scripts/futu_earnings_calendar.py --days 1"
+      timeout: 120
+      push_output: true
+
+  # 富途经济事件日历 —— 每日 21:00 推送明日高重要性经济事件预告(Futu OpenD)
+  - name: "futu-econ-calendar"
+    type: "script"
+    schedule: ["21:00"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      command: "python3 scripts/futu_econ_calendar.py --days 1"
+      timeout: 120
+      push_output: true
+
+  # 机构 13F 追踪 —— 已关闭 (2026-07-31): 非季末无产出(EDGAR 仅季度披露)
+
+  # 超级投资者 13F 追踪 —— 已关闭 (2026-07-31): 28s 跑出 0 字节(非季末无新披露)
+
+  # 全球经济数据总览（World Bank）。每日查,脚本内每月仅输出一次(月度门控)
+  # global-macro 已移除(2026-07-18): 内容合并至 closing-briefing
+
+  # ── 新闻聚合简报 (2026-08-02 重构) ──
+  # digest 新闻摘要(news_aggregate 桶)+ BlockBeats 快讯合并,早报/晚报各一次。
+  # 原 blockbeats-evening 独立源(19:00)与 us-preview 的"资讯摘要"段均并入。
+  - name: "news-aggregate-morning"
+    type: "market-briefing"
+    schedule: ["09:15"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      briefing_type: "aggregate"
+      blockbeats_mode: "morning"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+
+  - name: "news-aggregate-evening"
+    type: "market-briefing"
+    schedule: ["19:30"]
+    sinks: ["wechat-main", "discord-webhook"]
+    options:
+      briefing_type: "aggregate"
+      blockbeats_mode: "evening"
+      python_cmd: "python3"
+      scripts_dir: "scripts"
+
+market:
+  default: "yahoo"
+  providers:
+    - name: "yahoo"
+      type: "yahoo"
+  smart_cache:
+    enabled: true
+    trading_ttl: 30
+    closed_ttl: 600
+    pre_market_ttl: 120
+    after_hours_ttl: 120
+    crypto_ttl: 30
+    cache_size: 2000
+
+# ── LLM ──────────────────────────────────────────────────────────────────────
+
+llm:
+  provider: "deepseek"
+  api_url: "https://api.deepseek.com"
+  api_key: "${DEEPSEEK_API_KEY}"
+  model: "deepseek-v4-flash"      # 日常: Chat / 翻译+简评(Enhance) / AI Filter
+  heavy_model: "deepseek-v4-pro"  # 深度推理: 观复读盘 / 投资人 agent
+  thinking_mode: "thinking"
+  enhance:
+    enabled: true
+    max_per_hour: 20
+
+# ── Filters ───────────────────────────────────────────────────────────────────
+
+filters:
+  content:
+    enabled: true
+    min_content_length: 15
+    block_keywords:
+      - "(?i)^https?://"
+      - "(?i)^(rt|retweet)\\s*[@:]"
+      - "(?i)\\[video\\]"
+      - "(?i)\\[image\\]"
+      - "(?i)^watch\\s*:?\\s*https?://"
+      - "(?i)^live\\s*:?\\s*https?://"
+      - "(?i)^🔴\\s*(live|breaking)\\s*$"
+      - "(?i)^pic\\.twitter\\.com"
+    strict_sources:
+      - "trump-rss"
+
+  dedup:
+    enabled: true
+    ttl: 43200  # 12h，配合 max_age_hours: 12
+    groups:
+      # energy-connects 已禁用(2026-07-31),不在去重组(2026-08-02 清理)
+      - ["trump-rss", "bwe-tradfi", "kobeissi-letter",
+         "fed-press", "bloomberg-markets", "bloomberg-economics",
+         "bloomberg-politics", "forexlive-breaking"]
+    semantic:
+      enabled: true
+      threshold: 0.75
+      time_window: 5400
+      cache_size: 2000
+
+  ratelimit:
+    enabled: true
+    rules:
+      - source: "*"
+        sink: "wechat-main"
+        max_per_minute: 100
+      - source: "*"
+        sink: "discord-webhook"
+        max_per_minute: 100
+      - source: "us-macro-report"
+        sink: "*"
+        max_per_minute: 10
+      - source: "guanfu-score"
+        sink: "*"
+        max_per_minute: 10
+      - source: "*"
+        sink: "*"
+        max_per_minute: 100
+
+  # ai_filter 现在是阻塞式门禁（评分<6 或 无价值/无关 直接拦截），不再只打分。
+  ai_filter:
+    enabled: true
+    threshold_score: 6.5  # 2026-07-31: 7.5→6.5 — score 7 条目(重要信号)此前全被误杀,24条/天漏诊
+    max_per_minute: 30
+    global_max_per_minute: 60
+    block_categories:
+      - "无价值"
+      - "无关"
+    target_sources:
+      - "trump-rss"
+      - "bwe-tradfi"
+      - "kobeissi-letter"
+      - "fed-press"
+      - "bloomberg-markets"
+      - "bloomberg-economics"
+      - "bloomberg-politics"
+      - "forexlive-breaking"
+# ── Source Health ─────────────────────────────────────────────────────────────
+
+source_health:
+  enabled: true
+  degraded_threshold: 3
+  unhealthy_threshold: 5
+  recovery_interval: 300
+  renotify_interval: 21600   # 持续 unhealthy 期间每 6h 重复告警
+  # 源健康告警渠道。主推企业微信(实测可达,主人天天看)；feishu 接好 webhook 后作冗余。
+  # 之前只配 feishu-bot 且其无 webhook → 告警全失败,源连挂一整天无人知。
+  notify_channels:
+    - "wechat-main"
+    - "feishu-bot"
+
+# ── Alert ─────────────────────────────────────────────────────────────────────
+
+alert:
+  enabled: true
+  check_interval: 30
+  max_alerts_per_user: 50
+  default_cooldown: 300

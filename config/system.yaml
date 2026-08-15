@@ -1,0 +1,31 @@
+version: 1
+ports_registry: ../../docs/ports.yaml
+candidate:
+  root: ../data/nimbusd-candidate
+  marker: .nimbus-candidate-root
+  release_dir: releases
+  evidence_dir: evidence
+  backup_dir: backups
+  restore_dir: restores
+runtimes:
+  agent:
+    enabled: false
+    argv: []
+  embedding:
+    enabled: false
+    argv: []
+commands:
+  git:
+    argv: [git]
+  go:
+    argv: [go]
+release:
+  max_file_bytes: 268435456
+  include: [.]
+  exclude: [data, bin, web/node_modules]
+backup:
+  required_objects:
+    - {name: news, kind: bolt, path: news.db}
+    - {name: control, kind: sqlite, path: control.db}
+    - {name: signals, kind: jsonl, path: signals/events.jsonl}
+    - {name: shadow_feed, kind: rolling_jsonl, path: feed/shadow.jsonl}

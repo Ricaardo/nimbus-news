@@ -1,0 +1,18 @@
+[Unit]
+Description=News Platform (VPS, no OpenD)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/news
+ExecStart=/bin/bash /opt/news/deploy/launch-vps.sh
+Restart=always
+RestartSec=15
+# 双保险：时区也通过进程环境固定（脚本内已 export，这里再设一次）
+Environment=TZ=Asia/Shanghai
+StandardOutput=append:/opt/news/logs/platform.out.log
+StandardError=append:/opt/news/logs/platform.err.log
+
+[Install]
+WantedBy=multi-user.target

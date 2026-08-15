@@ -1,0 +1,61 @@
+# A股热门板块推送系统依赖
+# 安装: pip install -r scripts/requirements.txt
+
+# ============================================
+# 核心数据源 (按优先级排序)
+# ============================================
+
+# 0. iFinD (同花顺专业数据接口，优先级最高)
+# 下载地址: https://quantapi.51ifind.com/
+# 使用: export IFIND_USER="your_username" IFIND_PASS="your_password"
+# 注意: 需要有 iFinD 账号（机构/高校/个人试用）
+# iFinDPy (手动安装，从官网下载)
+
+# 1. 同花顺问财 (推荐，人气数据最准)
+# 注意: 需要安装 Node.js v16+ (https://nodejs.org/)
+# 使用: python scripts/wencai_cookie.py --interactive 自动获取 Cookie
+#       或 export WENCAI_COOKIE="your_cookie" 手动配置
+pywencai>=0.12.0       # 同花顺问财接口
+
+# Cookie 自动获取工具 (可选，推荐)
+# 安装后需运行: playwright install chromium
+playwright>=1.40.0     # 浏览器自动化
+
+# 2. AKShare (东方财富数据，必需)
+akshare>=1.14.0        # A股数据接口
+
+# 3. BaoStock (免费历史K线数据，推荐)
+# 优点: 完全免费、无需注册、稳定可靠
+# 官网: http://baostock.com
+baostock>=0.8.8        # 证券宝数据接口
+
+# 4. AData (备选数据源，可选)
+# adata>=1.0.0
+
+# 5. Longbridge OpenAPI (持牌实时行情，港股/A股/美股，行情 adapter 优先级最高)
+# 被 scripts/longbridge_helper.py 调用，供 Go 行情 adapter 通过 subprocess 使用
+# 凭证: .env 的 LONGPORT_APP_KEY / LONGPORT_APP_SECRET / LONGPORT_ACCESS_TOKEN
+# 申请: https://open.longportapp.com/
+longport>=2.0.0        # 长桥证券 OpenAPI SDK
+
+# ============================================
+# 数据处理
+# ============================================
+pandas>=2.0.0
+numpy>=1.24.0
+
+# ============================================
+# 网络请求
+# ============================================
+requests>=2.28.0
+
+# ============================================
+# 配置解析
+# ============================================
+pyyaml>=6.0
+
+# ============================================
+# 可选依赖
+# ============================================
+# schedule>=1.2.0      # 定时任务
+# apscheduler>=3.10.0  # 高级调度
