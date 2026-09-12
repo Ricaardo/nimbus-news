@@ -847,6 +847,10 @@ func (s *DigestStore) ExpireDue(ctx context.Context) (digest.ExpiryResult, error
 			if err != nil {
 				return err
 			}
+			if recoverExpiredLease(&item, now) {
+				changed = true
+				result.Items++
+			}
 			if terminalizeExpiredItem(&item, now) {
 				changed = true
 				result.Items++
@@ -1555,6 +1559,18 @@ func decodeDigestItem(raw []byte, now time.Time) (digest.Item, bool, error) {
 		changed = true
 	}
 	return item, changed, nil
+}
+
+// recoverExpiredLease returns an abandoned, non-delivery lease to the pending queue.
+// A process crash or a stopped briefing worker must not leave an item leased forever.
+func recoverExpiredLease(item *digest.Item, now time.Time) bool {
+	if item.State != digest.Leased || item.DeliveryID != "" || item.LeaseUntil.IsZero() || item.LeaseUntil.After(now) {
+		return false
+	}
+	item.State = digest.Pending
+	item.LeaseID = ""
+	item.LeaseUntil = time.Time{}
+	return true
 }
 
 func terminalizeExpiredItem(item *digest.Item, now time.Time) bool {
