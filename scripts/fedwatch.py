@@ -71,7 +71,19 @@ def effr_now() -> float | None:
             if obs and obs[-1]["value"] is not None:
                 return float(obs[-1]["value"])
     except Exception:  # noqa: BLE001
-        return None
+        # VPS fallback: use the existing FRED credential when the local gateway is unavailable.
+        key = os.environ.get("FRED_API_KEY", "")
+        if not key:
+            return None
+        try:
+            import urllib.parse
+            q = urllib.parse.urlencode({"series_id": "EFFR", "api_key": key, "file_type": "json", "limit": 1, "sort_order": "desc"})
+            with urllib.request.urlopen("https://api.stlouisfed.org/fred/series/observations?" + q, timeout=15) as r:
+                obs = json.load(r).get("observations", [])
+            if obs and obs[0].get("value") not in (None, "."):
+                return float(obs[0]["value"])
+        except Exception:  # noqa: BLE001
+            return None
     return None
 
 
