@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Ricaardo/nimbus-os/news/internal/channel"
 	"github.com/Ricaardo/nimbus-os/news/internal/model"
@@ -62,32 +63,34 @@ func (w *WechatChannel) Send(ctx context.Context, msg *model.Message) error {
 		return fmt.Errorf("channel %s cannot send or no webhook configured", w.Name())
 	}
 
-	var payload map[string]interface{}
-	// 结构化报告类消息用 markdown，普通新闻用 text
+	// 结构化报告类消息用 markdown，普通新闻用 text；超限时分段发送。
 	if model.IsStructuredReport(msg.SourceType) {
-		payload = map[string]interface{}{
-			"msgtype": "markdown",
-			"markdown": map[string]string{
-				"content": w.buildMarkdownContent(msg),
-			},
+		for _, part := range splitWechatText(w.buildMarkdownContent(msg), 4096) {
+			payload := map[string]interface{}{"msgtype": "markdown", "markdown": map[string]string{"content": part}}
+			if err := w.sendRequest(ctx, payload); err != nil {
+				return err
+			}
 		}
 	} else {
-		payload = map[string]interface{}{
-			"msgtype": "text",
-			"text": map[string]string{
-				"content": w.buildContent(msg),
-			},
+		for _, part := range splitWechatText(w.buildContent(msg), 2000) {
+			payload := map[string]interface{}{"msgtype": "text", "text": map[string]string{"content": part}}
+			if err := w.sendRequest(ctx, payload); err != nil {
+				return err
+			}
 		}
 	}
 
-	if err := w.sendRequest(ctx, payload); err != nil {
-		return err
-	}
-
-	// 结构化报告带主图时,追加图片消息(企微机器人 image 类型,base64+md5)
-	if msg.ImageURL != "" {
-		if err := w.sendImageMessage(ctx, msg.ImageURL); err != nil {
-			slog.Warn("wechat image send failed", "url", msg.ImageURL, "error", err)
+	// 发送主图及附加图片。
+	imageURLs := append([]string{}, msg.ImageURL)
+	imageURLs = append(imageURLs, msg.ImageURLs...)
+	seenImages := map[string]bool{}
+	for _, imageURL := range imageURLs {
+		if imageURL == "" || seenImages[imageURL] {
+			continue
+		}
+		seenImages[imageURL] = true
+		if err := w.sendImageMessage(ctx, imageURL); err != nil {
+			slog.Warn("wechat image send failed", "url", imageURL, "error", err)
 		}
 	}
 	return nil
@@ -174,7 +177,7 @@ func buildImageMD5(data []byte) string {
 // buildMarkdownContent 构建企业微信 markdown 格式（结构化报告）
 func (w *WechatChannel) buildMarkdownContent(msg *model.Message) string {
 	fm := channel.BuildFormattedMessage(msg, channel.FormatOptions{
-		MaxContentLen: 4096,
+		MaxContentLen: 0,
 		Platform:      "wechat",
 	})
 
@@ -196,10 +199,29 @@ func (w *WechatChannel) buildMarkdownContent(msg *model.Message) string {
 
 	sb.WriteString(fmt.Sprintf("\n<font color=\"comment\">%s %s · %s</font>", emoji, fm.DisplaySource, fm.Timestamp))
 
-	return channel.ClampRunes(sb.String(), 4096)
+	return sb.String()
 }
 
 // SendBatch 批量发送
+func splitWechatText(text string, maxBytes int) []string {
+	var parts []string
+	for len(text) > maxBytes {
+		cut := maxBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		if idx := strings.LastIndex(text[:cut], "\n"); idx > maxBytes/2 {
+			cut = idx
+		}
+		parts = append(parts, text[:cut])
+		text = strings.TrimLeft(text[cut:], "\n")
+	}
+	if text != "" {
+		parts = append(parts, text)
+	}
+	return parts
+}
+
 func (w *WechatChannel) SendBatch(ctx context.Context, msgs []*model.Message) error {
 	for i, msg := range msgs {
 		if err := w.Send(ctx, msg); err != nil {
@@ -224,7 +246,7 @@ func (w *WechatChannel) Reply(ctx context.Context, originalMsgID string, reply *
 func (w *WechatChannel) buildContent(msg *model.Message) string {
 	fm := channel.BuildFormattedMessage(msg, channel.FormatOptions{
 		MaxTitleLen:   0,
-		MaxContentLen: 1500,
+		MaxContentLen: 0,
 		Platform:      "wechat",
 	})
 
@@ -255,7 +277,7 @@ func (w *WechatChannel) buildContent(msg *model.Message) string {
 
 	sb.WriteString(fmt.Sprintf("\n\n%s %s | %s", emoji, fm.DisplaySource, fm.Timestamp))
 
-	return channel.ClampRunes(sb.String(), 2000)
+	return sb.String()
 }
 
 func (w *WechatChannel) sendRequest(ctx context.Context, payload interface{}) error {

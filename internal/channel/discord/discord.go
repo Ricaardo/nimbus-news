@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/Ricaardo/nimbus-os/news/internal/channel"
 	"github.com/Ricaardo/nimbus-os/news/internal/model"
@@ -293,15 +294,23 @@ func (d *DiscordChannel) Send(ctx context.Context, msg *model.Message) error {
 
 // sendViaBot 通过 Bot API 发送消息
 func (d *DiscordChannel) sendViaBot(ctx context.Context, msg *model.Message) error {
-	embed := d.buildDiscordEmbed(msg)
-
+	embeds := d.buildDiscordEmbeds(msg)
 	if d.session != nil && d.channelID != "" {
-		// 使用 Thread Pool 模式
 		if d.threadPool != nil && d.threadDedup != nil {
-			return d.sendViaThreadPool(ctx, msg, embed)
+			if err := d.sendViaThreadPool(ctx, msg, embeds[0]); err != nil {
+				return err
+			}
+			threadID, err := d.threadPool.GetOrCreateThread(msg.Source)
+			if err != nil {
+				return err
+			}
+			for _, embed := range embeds[1:] {
+				if err := d.threadPool.AppendMessage(threadID, embed); err != nil {
+					return err
+				}
+			}
+			return nil
 		}
-
-		// 每条消息创建独立帖子（论坛 feed 可见）
 		threadName := msg.Title
 		if threadName == "" {
 			threadName = msg.Source
@@ -309,11 +318,23 @@ func (d *DiscordChannel) sendViaBot(ctx context.Context, msg *model.Message) err
 		if len(threadName) > 100 {
 			threadName = threadName[:97] + "..."
 		}
-		return d.createForumThreadWithRetry(ctx, d.channelID, threadName, embed)
+		thread, err := d.createForumThreadWithRetry(ctx, d.channelID, threadName, embeds[0])
+		if err != nil {
+			return err
+		}
+		for _, embed := range embeds[1:] {
+			if _, err := d.session.ChannelMessageSendEmbed(thread.ID, embed); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
-
-	_, err := d.session.ChannelMessageSendEmbed(d.channelID, embed)
-	return err
+	for _, embed := range embeds {
+		if _, err := d.session.ChannelMessageSendEmbed(d.channelID, embed); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // sendViaThreadPool 通过 Thread Pool 发送消息
@@ -375,17 +396,17 @@ func (d *DiscordChannel) retryAppendWithBackoff(ctx context.Context, sourceName,
 }
 
 // createForumThreadWithRetry 创建 Forum 线程（带速率限制重试）
-func (d *DiscordChannel) createForumThreadWithRetry(ctx context.Context, channelID, threadName string, embed *discordgo.MessageEmbed) error {
+func (d *DiscordChannel) createForumThreadWithRetry(ctx context.Context, channelID, threadName string, embed *discordgo.MessageEmbed) (*discordgo.Channel, error) {
 	maxRetries := 5
 	baseDelay := time.Second * 12 // Discord rate limit window 通常 12-15 秒
 
 	for i := 0; i < maxRetries; i++ {
-		_, err := d.session.ForumThreadStartEmbed(channelID, threadName, 1440, embed)
+		thread, err := d.session.ForumThreadStartEmbed(channelID, threadName, 1440, embed)
 		if err == nil {
 			if i > 0 {
 				slog.Info("Discord: ForumThread created after", "i", i)
 			}
-			return nil
+			return thread, nil
 		}
 
 		// 检查是否是速率限制错误
@@ -398,40 +419,39 @@ func (d *DiscordChannel) createForumThreadWithRetry(ctx context.Context, channel
 			}
 			slog.Info("Discord: rate limited, retrying i", "delay", delay, "i_1", i+1, "maxretries", maxRetries)
 			if err := waitForContext(ctx, delay); err != nil {
-				return err
+				return nil, err
 			}
 			continue
 		}
 
 		// 其他错误直接返回
 		slog.Warn("Discord: ForumThreadStartEmbed error", "err", err)
-		return err
+		return nil, err
 	}
 
-	return fmt.Errorf("discord rate limit exceeded after %d retries", maxRetries)
+	return nil, fmt.Errorf("discord rate limit exceeded after %d retries", maxRetries)
 }
 
 // sendViaWebhook 通过 Webhook 发送消息
 func (d *DiscordChannel) sendViaWebhook(ctx context.Context, msg *model.Message) error {
-	embed := embedToMap(d.buildDiscordEmbed(msg))
-	payload := map[string]interface{}{
-		"embeds": []map[string]interface{}{embed},
-	}
-
-	// 仅论坛频道才需 thread_name（每条建独立帖）；
-	// webhook_plain=true 的普通文本频道不能带 thread_name，否则 Discord 报错
-	if !d.webhookPlain && d.threadID == "" {
-		threadName := msg.Title
-		if threadName == "" {
-			threadName = msg.Source
+	webhook := d.nextWebhook()
+	for i, discordEmbed := range d.buildDiscordEmbeds(msg) {
+		payload := map[string]interface{}{"embeds": []map[string]interface{}{embedToMap(discordEmbed)}}
+		if i == 0 && !d.webhookPlain && d.threadID == "" {
+			threadName := msg.Title
+			if threadName == "" {
+				threadName = msg.Source
+			}
+			if len(threadName) > 100 {
+				threadName = threadName[:97] + "..."
+			}
+			payload["thread_name"] = threadName
 		}
-		if len(threadName) > 100 {
-			threadName = threadName[:97] + "..."
+		if err := d.sendRequest(ctx, webhook, payload); err != nil {
+			return err
 		}
-		payload["thread_name"] = threadName
 	}
-
-	return d.sendRequest(ctx, d.nextWebhook(), payload)
+	return nil
 }
 
 // nextWebhook 轮询选取下一个 webhook，将推送分散到多个 webhook 以规避单点频控
@@ -471,18 +491,22 @@ func (d *DiscordChannel) Reply(ctx context.Context, originalMsgID string, reply 
 
 	// 使用 Bot API 回复
 	if d.session != nil && channelID != "" {
-		content := reply.Content
-
-		// 如果内容过长，截断
-		if len(content) > 2000 {
-			content = content[:1997] + "..."
+		parts := splitDiscordText(reply.Content, 2000)
+		if len(parts) == 0 {
+			parts = []string{""}
 		}
-
-		_, err := d.session.ChannelMessageSendReply(channelID, content, &discordgo.MessageReference{
-			MessageID: originalMsgID,
-			ChannelID: channelID,
-		})
-		return err
+		for i, content := range parts {
+			var err error
+			if i == 0 {
+				_, err = d.session.ChannelMessageSendReply(channelID, content, &discordgo.MessageReference{MessageID: originalMsgID, ChannelID: channelID})
+			} else {
+				_, err = d.session.ChannelMessageSend(channelID, content)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	// 回退到普通发送
@@ -509,10 +533,60 @@ func sourceMeta(sourceType string) (color int, emoji string) {
 }
 
 // buildDiscordEmbed 构建 discordgo.MessageEmbed（Bot 和 Webhook 共用）
+func (d *DiscordChannel) buildDiscordEmbeds(msg *model.Message) []*discordgo.MessageEmbed {
+	base := d.buildDiscordEmbed(msg)
+	parts := splitDiscordText(base.Description, 4096)
+	if len(parts) == 0 {
+		parts = []string{""}
+	}
+	embeds := make([]*discordgo.MessageEmbed, 0, len(parts)+len(msg.ImageURLs))
+	for i, part := range parts {
+		cp := *base
+		cp.Description = part
+		if i > 0 {
+			cp.Title = ""
+			cp.URL = ""
+			cp.Fields = nil
+			cp.Footer = nil
+		}
+		embeds = append(embeds, &cp)
+	}
+	seen := map[string]bool{}
+	if msg.ImageURL != "" {
+		seen[msg.ImageURL] = true
+	}
+	for _, imageURL := range msg.ImageURLs {
+		if imageURL != "" && !seen[imageURL] {
+			seen[imageURL] = true
+			embeds = append(embeds, &discordgo.MessageEmbed{Image: &discordgo.MessageEmbedImage{URL: imageURL}, Color: base.Color})
+		}
+	}
+	return embeds
+}
+
+func splitDiscordText(text string, maxBytes int) []string {
+	var parts []string
+	for len(text) > maxBytes {
+		cut := maxBytes
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		if idx := strings.LastIndex(text[:cut], "\n"); idx > maxBytes/2 {
+			cut = idx
+		}
+		parts = append(parts, text[:cut])
+		text = strings.TrimLeft(text[cut:], "\n")
+	}
+	if text != "" {
+		parts = append(parts, text)
+	}
+	return parts
+}
+
 func (d *DiscordChannel) buildDiscordEmbed(msg *model.Message) *discordgo.MessageEmbed {
 	fm := channel.BuildFormattedMessage(msg, channel.FormatOptions{
 		MaxTitleLen:   256,
-		MaxContentLen: 4096,
+		MaxContentLen: 0,
 		Platform:      "discord",
 	})
 
@@ -570,7 +644,7 @@ func (d *DiscordChannel) buildDiscordEmbed(msg *model.Message) *discordgo.Messag
 	}
 
 	if len(descParts) > 0 {
-		embed.Description = channel.ClampRunes(strings.Join(descParts, "\n\n"), 4096)
+		embed.Description = strings.Join(descParts, "\n\n")
 	}
 
 	if fm.PrimaryLink != "" {
