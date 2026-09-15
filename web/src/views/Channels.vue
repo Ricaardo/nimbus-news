@@ -55,11 +55,10 @@
     <el-dialog v-model="createVisible" title="新增渠道" width="550px">
       <el-form :model="createForm" label-width="120px">
         <el-form-item label="名称">
-          <el-input v-model="createForm.name" placeholder="唯一标识，如 feishu-push" />
+          <el-input v-model="createForm.name" placeholder="唯一标识，如 wechat-main" />
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="createForm.type" placeholder="选择类型" @change="onCreateTypeChange">
-            <el-option label="飞书" value="feishu" />
             <el-option label="微信" value="wechat" />
             <el-option label="Telegram" value="telegram" />
             <el-option label="Discord" value="discord" />
@@ -107,7 +106,6 @@
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="editForm.type">
-            <el-option label="飞书" value="feishu" />
             <el-option label="微信" value="wechat" />
             <el-option label="Telegram" value="telegram" />
             <el-option label="Discord" value="discord" />
@@ -273,7 +271,6 @@ const editChannel = async (channel) => {
 
 const showOpt = (type, key) => {
   const map = {
-    feishu: ['app_id', 'app_secret', 'encrypt_key', 'verification_token'],
     wechat: ['bot_token', 'app_id', 'app_secret'],
     telegram: ['bot_token'],
     discord: ['bot_token'],

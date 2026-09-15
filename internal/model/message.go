@@ -33,7 +33,7 @@ type Message struct {
 	Tags       []string `json:"tags,omitempty"`
 
 	// 对话相关
-	Platform    string `json:"platform,omitempty"`     // feishu/wechat/telegram
+	Platform    string `json:"platform,omitempty"`     // wechat/telegram
 	ChatID      string `json:"chat_id,omitempty"`      // 会话ID
 	ChatType    string `json:"chat_type,omitempty"`    // private/group
 	UserID      string `json:"user_id,omitempty"`      // 发送者ID

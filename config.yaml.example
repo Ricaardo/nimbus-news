@@ -7,27 +7,6 @@ server:
 
 # 渠道配置 (推送 + 接收)
 channels:
-  # 飞书群推送 - 仅推送新闻到群
-  - name: "feishu-push"
-    type: "feishu"
-    mode: "push"
-    enabled: false  # 暂时关闭
-    webhook: "${FEISHU_PUSH_WEBHOOK}"
-
-  # 飞书交互机器人 - 双向交互（需要配置应用凭证）
-  - name: "feishu-bot"
-    type: "feishu"
-    mode: "bidirectional"
-    enabled: false
-    # ⚠️ 即使是 bot 模式，对外发消息(如健康告警)也走顶层 webhook(飞书自定义机器人)。
-    # 缺这行 → "feishu-bot cannot send or no webhook configured"，源挂了也没人知道。
-    webhook: "${FEISHU_WEBHOOK}"
-    options:
-      app_id: "${FEISHU_APP_ID}"
-      app_secret: "${FEISHU_APP_SECRET}"
-      encrypt_key: "${FEISHU_ENCRYPT_KEY}"
-      verification_token: "${FEISHU_VERIFICATION_TOKEN}"
-
   # 企业微信 - 推送
   - name: "wechat-main"
     type: "wechat"
@@ -434,11 +413,10 @@ source_health:
   unhealthy_threshold: 5
   recovery_interval: 300
   # 源健康告警渠道。主推一个「实测可达、你每天会看」的渠道(这里用企业微信 wechat-main)，
-  # feishu-bot 接好 webhook 后作冗余。切忌只配一个没接 webhook 的渠道——否则源挂了告警
+  # 切忌只配一个没接 webhook 的渠道——否则源挂了告警
   # 会全部静默失败(踩过坑：market-summary 连挂一整天无人知)。
   notify_channels:
     - "wechat-main"
-    - "feishu-bot"
 
 alert:
   enabled: true

@@ -52,7 +52,7 @@ type MessageHandler func(ctx context.Context, msg *model.Message)
 // Config 渠道配置
 type Config struct {
 	Name    string                 `yaml:"name"`
-	Type    string                 `yaml:"type"` // feishu/wechat/telegram/discord/rest
+	Type    string                 `yaml:"type"` // wechat/telegram/discord/rest
 	Mode    Mode                   `yaml:"mode"` // push/receive/bidirectional
 	Webhook string                 `yaml:"webhook,omitempty"`
 	Options map[string]interface{} `yaml:"options,omitempty"`

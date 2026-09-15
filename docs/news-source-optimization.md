@@ -27,7 +27,7 @@
 | `kitco-precious` | rss | kitco 直连 | 300s | ✅ 正常 |
 | `finnhub-market` | finnhub | finnhub API | 600s | ❌ 已禁用（key 已配） |
 
-渠道：`wechat-main` / `discord-push`(forum) / `discord-webhook`(plain) / `feishu-bot`(双向)。Telegram 已移除。
+渠道：`wechat-main` / `discord-webhook`(plain)。Telegram 已移除。
 
 ---
 

@@ -61,7 +61,7 @@
 
 **news 不该废，它有 nimbus 没有的：**
 1. **实时新闻 firehose**：bwe-ws(websocket) / trump.fm(60s) / finnhub —— nimbus 没有持续 feed（只有 on-demand + 日 cron）。
-2. **多渠道推送**：企业微信 / 飞书（nimbus 仅 Discord/TG）。
+2. **多渠道推送**：企业微信（nimbus 仅 Discord/TG）。
 3. **结构化独家数据**：13F 持仓变动、A股扫描候选、（拟加）国会交易。
 
 **唯一值得做的整合 = 数据桥（news → nimbus），而非合并代码：**

@@ -437,7 +437,7 @@ var (
 // DigestSinkLabel bounds sink-cardinality even if configuration is malformed.
 func DigestSinkLabel(sink string) string {
 	switch sink {
-	case "feishu-bot", "wechat-main", "discord-webhook":
+	case "wechat-main", "discord-webhook":
 		return sink
 	default:
 		return "other"

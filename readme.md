@@ -1,6 +1,6 @@
 # News-Fetcher 投资信息平台
 
-News-Fetcher 是一个 Go + Vue 的投资信息聚合平台，负责拉取市场新闻、A 股聚合报告、行情快照和 LLM 点评，并通过企业微信、Discord、Telegram、飞书等渠道推送。
+News-Fetcher 是一个 Go + Vue 的投资信息聚合平台，负责拉取市场新闻、A 股聚合报告、行情快照和 LLM 点评，并通过企业微信、Discord、Telegram 等渠道推送。
 
 ## 当前结构
 

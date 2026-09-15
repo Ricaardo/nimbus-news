@@ -235,8 +235,8 @@ func TestProductionTopologyTemplateLoadsWithoutSecrets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cfg.Sources) != 19 || len(cfg.Channels) != 4 {
-		t.Fatalf("template topology sources=%d channels=%d (want 19 = 15 原 + fed-speeches + eia-energy + earnings-calendar + econ-calendar)", len(cfg.Sources), len(cfg.Channels))
+	if len(cfg.Sources) != 19 || len(cfg.Channels) != 3 {
+		t.Fatalf("template topology sources=%d channels=%d (want 19 sources and 3 channels after Feishu removal)", len(cfg.Sources), len(cfg.Channels))
 	}
 	assertTemplateRuntimeSafety(t, cfg, "blockbeats-test-canary")
 	data, err := os.ReadFile(filepath.Join("..", "..", "config.platform.yaml.example"))

@@ -19,7 +19,6 @@ import (
 	"github.com/Ricaardo/nimbus-os/news/internal/bootstrap"
 	"github.com/Ricaardo/nimbus-os/news/internal/channel"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/discord"
-	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/feishu"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/telegram"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/wechat"
 	_ "github.com/Ricaardo/nimbus-os/news/internal/channel/wxofficial"

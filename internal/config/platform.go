@@ -55,7 +55,7 @@ type ServerConfig struct {
 // ChannelConfig 渠道配置（重构后的统一渠道）
 type ChannelConfig struct {
 	Name    string                 `yaml:"name"`
-	Type    string                 `yaml:"type"`              // feishu/wechat/telegram/discord/rest
+	Type    string                 `yaml:"type"`              // wechat/telegram/discord/rest
 	Mode    string                 `yaml:"mode"`              // push/receive/bidirectional
 	Enabled *bool                  `yaml:"enabled,omitempty"` // 是否启用，默认 true
 	Webhook string                 `yaml:"webhook,omitempty"`

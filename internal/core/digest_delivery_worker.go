@@ -333,7 +333,7 @@ func (w *digestDeliveryWorker) refreshStats(ctx context.Context) bool {
 	metrics.DigestOldestPendingAge.Set(oldestAge)
 	sinkMetrics := aggregateDigestSinkMetrics(stats.Sinks)
 	for _, label := range []string{
-		"feishu-bot", "wechat-main", "discord-webhook", "other",
+		"wechat-main", "discord-webhook", "other",
 	} {
 		sinkStats := sinkMetrics[label]
 		metrics.DigestSinkPending.WithLabelValues(label).Set(float64(sinkStats.Pending))

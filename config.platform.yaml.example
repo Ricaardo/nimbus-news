@@ -18,19 +18,6 @@ store:
 mirror_channels: ["wechat-main"]
 
 channels:
-  - name: "feishu-bot"
-    type: "feishu"
-    mode: "push"
-    enabled: true
-    # ⚠️ push 模式发消息走顶层 webhook(飞书自定义机器人)。此前缺这行 → 健康告警
-    # 每次 "feishu-bot cannot send or no webhook configured"，源挂了也没人知道。
-    webhook: "${FEISHU_WEBHOOK}"
-    options:
-      app_id: "${FEISHU_APP_ID}"
-      app_secret: "${FEISHU_APP_SECRET}"
-      encrypt_key: "${FEISHU_ENCRYPT_KEY}"
-      verification_token: "${FEISHU_VERIFICATION_TOKEN}"
-
   - name: "wechat-main"
     type: "wechat"
     mode: "push"
@@ -682,8 +669,7 @@ source_health:
   unhealthy_threshold: 5
   recovery_interval: 300
   renotify_interval: 21600   # 持续 unhealthy 期间每 6h 重复告警
-  # 源健康告警渠道。主推企业微信(实测可达,主人天天看)；feishu 接好 webhook 后作冗余。
-  # 之前只配 feishu-bot 且其无 webhook → 告警全失败,源连挂一整天无人知。
+  # 源健康告警渠道。主推企业微信(实测可达,主人天天看)。
   notify_channels:
     - "wechat-main"
 

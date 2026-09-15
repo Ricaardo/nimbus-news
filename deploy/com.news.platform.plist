@@ -19,7 +19,7 @@
   UNLOAD:
     launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.news.platform.plist
 
-  NOTE: launch-platform.sh 自行加载 .env（含 LLM/feishu/wechat/webhook 密钥），
+  NOTE: launch-platform.sh 自行加载 .env（含 LLM/wechat/webhook 密钥），
         EnvironmentVariables 故意不放任何密钥。
 -->
 <plist version="1.0">

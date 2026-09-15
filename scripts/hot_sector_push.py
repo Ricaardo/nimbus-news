@@ -2808,7 +2808,7 @@ class PushChannel:
 
 
 class WebhookPush(PushChannel):
-    """Webhook 推送（支持企业微信、飞书、Discord）"""
+    """Webhook 推送（支持企业微信、Discord）"""
 
     def __init__(self, webhook_url: str, channel_type: str = "wechat"):
         self.webhook_url = webhook_url
@@ -2818,8 +2818,6 @@ class WebhookPush(PushChannel):
         try:
             if self.channel_type == "wechat":
                 payload = {"msgtype": "text", "text": {"content": content}}
-            elif self.channel_type == "feishu":
-                payload = {"msg_type": "text", "content": {"text": content}}
             elif self.channel_type == "discord":
                 # Discord 有2000字符限制，需要分段
                 payload = {"content": content[:2000]}
@@ -3199,10 +3197,6 @@ def main():
 
         if ch_type == "wechat" and ch.get("webhook"):
             push = WebhookPush(ch["webhook"], "wechat")
-            push.push(text_report)
-
-        elif ch_type == "feishu" and ch.get("webhook"):
-            push = WebhookPush(ch["webhook"], "feishu")
             push.push(text_report)
 
         elif ch_type == "telegram":

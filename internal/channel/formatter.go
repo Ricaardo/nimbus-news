@@ -24,7 +24,7 @@ type FormatOptions struct {
 	MaxContentLen int
 	EscapeHTML    bool
 	StripMarkdown bool
-	Platform      string // telegram/discord/wechat/feishu/wxofficial/wxpersonal
+	Platform      string // telegram/discord/wechat/wxofficial/wxpersonal
 }
 
 // DefaultOptions 返回默认选项
@@ -42,8 +42,6 @@ func DefaultOptions(platform string) FormatOptions {
 	case "discord":
 		opts.MaxTitleLen = 256
 		opts.MaxContentLen = 4096
-	case "feishu":
-		opts.MaxContentLen = 4000
 	case "wechat", "wxofficial":
 		opts.MaxContentLen = 2048
 	case "wxpersonal":
@@ -461,7 +459,6 @@ type LinkFormat string
 const (
 	LinkFormatHTML     LinkFormat = "html"     // <a href="url">text</a> - Telegram
 	LinkFormatMarkdown LinkFormat = "markdown" // [text](url) - Discord
-	LinkFormatLarkMD   LinkFormat = "lark_md"  // [text](url) - 飞书
 	LinkFormatPlain    LinkFormat = "plain"    // text: url - 纯文本
 )
 
@@ -477,7 +474,7 @@ func FormatLink(url, text string, format LinkFormat) string {
 	switch format {
 	case LinkFormatHTML:
 		return fmt.Sprintf("<a href=\"%s\">%s</a>", url, EscapeHTML(text))
-	case LinkFormatMarkdown, LinkFormatLarkMD:
+	case LinkFormatMarkdown:
 		return fmt.Sprintf("[%s](%s)", text, url)
 	case LinkFormatPlain:
 		return fmt.Sprintf("%s: %s", text, url)
@@ -527,8 +524,6 @@ func GetLinkFormat(platform string) LinkFormat {
 		return LinkFormatHTML
 	case "discord":
 		return LinkFormatMarkdown
-	case "feishu":
-		return LinkFormatLarkMD
 	case "wechat", "wxofficial", "wxpersonal":
 		return LinkFormatPlain
 	default:
