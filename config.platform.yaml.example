@@ -181,6 +181,43 @@ sources:
       max_age_hours: 12
       tags: ["宏观", "市场", "分析"]
 
+  # Walter Bloomberg —— 高频市场快讯（Telegram 公共频道的 RSS 转换源）。
+  # 仅放行重要宏观、能源、利率、制裁和地缘事件，避免连续讲话碎片造成噪音。
+  - name: "walter-bloomberg"
+    type: "rss"
+    url: "https://hub.wurang.net/telegram/channel/WalterBloomberg"
+    interval: 120
+    sinks: ["wechat-main", "discord-webhook", "news-feed"]
+    routing:
+      ai_policy: required
+      on_ai_failure: silent
+      critical_keywords:
+        - "rate decision"
+        - "interest rate"
+        - "central bank"
+        - "treasury yield"
+        - "10-year"
+        - "oil loadings"
+        - "oil supply"
+        - "sanctions"
+        - "tariff"
+        - "iran"
+        - "china"
+        - "央行"
+        - "利率"
+        - "收益率"
+        - "原油"
+        - "制裁"
+        - "关税"
+        - "伊朗"
+        - "中国"
+      direct: {min_score: 8, max_per_day: 12, priority: 75}
+      digest: {min_score: 7, max_per_day: 8, priority: 45, briefing_target: news_aggregate}
+      default: digest
+    options:
+      max_age_hours: 3
+      tags: ["宏观", "市场", "快讯"]
+
   # MMS News 已移除（2026-06）：ch2rss 代理冻结，最新条目停在 5/27，线上 0 条 / 213 轮，
   # 被 HealthMonitor 反复标记 unhealthy；且为山寨/meme 加密噪音，与 bwenews-live 仅留 BTC/HYPE 的策略相悖。
 
