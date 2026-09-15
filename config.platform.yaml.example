@@ -15,7 +15,7 @@ store:
 
 # 全量镜像：把所有通过过滤的新闻额外推一份到这些渠道。
 # 留空 [] 关闭镜像。
-mirror_channels: []
+mirror_channels: ["wechat-main"]
 
 channels:
   - name: "feishu-bot"
@@ -71,7 +71,7 @@ sources:
 
   - name: "trump-rss"
     type: "rss"
-    url: "https://trump.fm/rss/analysis.xml"   # Analysis feed: 链接指向AI分析页
+    url: "https://trump.fm/rss.xml"              # 主 feed，避免 analysis 子 feed 停更
     interval: 300
     sinks: ["wechat-main", "discord-webhook", "news-feed"]
     routing:
@@ -96,7 +96,7 @@ sources:
       digest: {min_score: 6.5, max_per_day: 2, priority: 40, briefing_target: news_aggregate}
       default: silent
     options:
-      max_age_hours: 2
+      max_age_hours: 6
       exclude_video_only: true
       exclude_reposts: true
       fetch_linked_body: true               # 抓取分析页正文
@@ -149,7 +149,7 @@ sources:
       digest: {min_score: 7, max_per_day: 3, priority: 30, briefing_target: news_aggregate}
       default: silent
     options:
-      max_age_hours: 1
+      max_age_hours: 3
       tags: ["机构", "对冲基金", "TradFi"]
 
   # Kobeissi Letter —— 数据驱动宏观分析，与 bwe-tradfi 互补（bwe=突发标题, Kobeissi=量化背景）
@@ -178,7 +178,7 @@ sources:
       digest: {min_score: 7, max_per_day: 3, priority: 40, briefing_target: news_aggregate}
       default: silent
     options:
-      max_age_hours: 2
+      max_age_hours: 12
       tags: ["宏观", "市场", "分析"]
 
   # MMS News 已移除（2026-06）：ch2rss 代理冻结，最新条目停在 5/27，线上 0 条 / 213 轮，
@@ -614,7 +614,6 @@ source_health:
   # 之前只配 feishu-bot 且其无 webhook → 告警全失败,源连挂一整天无人知。
   notify_channels:
     - "wechat-main"
-    - "feishu-bot"
 
 # ── Alert ─────────────────────────────────────────────────────────────────────
 
