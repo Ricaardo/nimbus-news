@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-label="nimbus-news">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#090d12"/><stop offset=".6" stop-color="#0d1117"/><stop offset="1" stop-color="#111923"/></linearGradient><linearGradient id="a" x1="0" x2="1"><stop offset="0" stop-color="#79c0ff"/><stop offset="1" stop-color="#56d4c8"/></linearGradient></defs>
+  <rect x="1" y="1" width="1278" height="638" rx="28" fill="url(#bg)" stroke="#2d3744"/>
+  <circle cx="1090" cy="40" r="180" fill="#79c0ff" opacity=".035"/><circle cx="1030" cy="560" r="180" fill="#56d4c8" opacity=".03"/>
+  <text x="66" y="76" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="16">EONCYRUS / PROJECT</text>
+  <text x="66" y="154" fill="#f0f6fc" font-family="Inter,system-ui,sans-serif" font-size="58" font-weight="760">nimbus-news</text>
+  <text x="68" y="202" fill="#f0f6fc" opacity=".82" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="22">Market intelligence, filtered.</text>
+  <text x="68" y="236" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="15">eoncyrus-lab</text>
+  <rect x="68" y="266" width="510" height="2" fill="url(#a)" opacity=".75"/>
+  <text x="68" y="310" fill="#79c0ff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="14">build · research · automate · repeat</text>
+  <g transform="translate(690,78)" opacity=".9">
+      <rect x="0" y="0" width="160" height="66" rx="14" fill="#111820" stroke="#79c0ff"/>
+      <rect x="20" y="18" width="55" height="8" rx="4" fill="#79c0ff" opacity=".85"/>
+      <rect x="20" y="34" width="115" height="5" rx="3" fill="#8b949e" opacity=".55"/>
+      <rect x="20" y="47" width="92" height="5" rx="3" fill="#8b949e" opacity=".35"/>
+      <rect x="35" y="96" width="160" height="66" rx="14" fill="#111820" stroke="#56d4c8"/>
+      <rect x="55" y="114" width="68" height="8" rx="4" fill="#56d4c8" opacity=".85"/>
+      <rect x="55" y="130" width="110" height="5" rx="3" fill="#8b949e" opacity=".55"/>
+      <rect x="55" y="143" width="84" height="5" rx="3" fill="#8b949e" opacity=".35"/>
+      <path d="M160 57l35 45" stroke="#2d3744" stroke-width="2"/><circle cx="197" cy="103" r="5" fill="#56d4c8"/>
+    </g>
+  
+  <g transform="translate(930,52)">
+    <rect x="0" y="0" width="285" height="250" rx="38" fill="#101820" stroke="#2d3744"/>
+    <path d="M58 182c-18-54 4-110 50-137 49-29 114-18 148 29 28 39 25 97-7 133-37 41-102 50-151 21-18-11-32-27-40-46z" fill="#eef2f7"/>
+    <ellipse cx="147" cy="135" rx="68" ry="61" fill="#f3dfdd"/>
+    <path d="M83 120c15-44 45-67 83-64 35 3 63 22 77 55-28-17-61-21-93-13-26 6-45 18-67 40z" fill="#eef2f7"/>
+    <path d="M91 77l-17-15 2 25m136-13 20-14-5 27" fill="#090d12" stroke="#79c0ff" stroke-width="2"/>
+    <path d="M105 134l13-9 13 9M166 134l13-9 13 9" fill="none" stroke="#202831" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <ellipse cx="101" cy="155" rx="16" ry="7" fill="#e7a2aa" opacity=".45"/>
+    <ellipse cx="196" cy="155" rx="16" ry="7" fill="#e7a2aa" opacity=".45"/>
+    <path d="M124 153q23 31 47 0c-2 30-11 44-24 44-14 0-21-15-23-44z" fill="#8d5562" stroke="#5a3b42" stroke-width="2"/>
+    <path d="M80 200q67 31 136 0l23 50H57z" fill="#090d12"/>
+    <path d="M138 67q-2-20 14-28-3 13 10 19" fill="none" stroke="#eef2f7" stroke-width="7" stroke-linecap="round"/>
+    <g transform="translate(92,74)">
+      <path d="M0 10L6 0l8 7 9-7 7 11v15H0z" fill="#090d12" stroke="#79c0ff" stroke-width="2"/>
+      <circle cx="9" cy="17" r="1.6" fill="#79c0ff"/><circle cx="21" cy="17" r="1.6" fill="#79c0ff"/>
+    </g>
+    <path d="M44 200q10-15 20 0t20 0M218 193q10-14 20 0" fill="none" stroke="#79c0ff" stroke-width="2" opacity=".6"/>
+  </g>
+  
+      <text x="66" y="500" fill="#8b949e" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="17">Systems · Agents · Markets · Information</text>
+      <text x="66" y="540" fill="#c9d1d9" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="20">Building tools to understand noisy systems.</text>
+      <rect x="66" y="575" width="1148" height="1" fill="#30363d"/>
+      <text x="66" y="610" fill="#79c0ff" font-family="ui-monospace,SFMono-Regular,Menlo,monospace" font-size="15">github.com/eoncyrus-lab</text>
+    </svg>
