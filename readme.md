@@ -1,6 +1,12 @@
-# nimbus-news
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./assets/hero-light.svg">
+    <img src="./assets/hero-dark.svg" width="100%" alt="nimbus-news">
+  </picture>
+</p>
 
-> Go + Vue market-intelligence pipeline for multi-source news, A-share reports, market snapshots, LLM analysis, and scheduled delivery.
+<p align="center"><sub><code>Go</code> · <code>Vue</code> · <code>LLM</code> · <code>Market Intelligence</code></sub></p>
 
 `nimbus-news` 是一个个人投资信息聚合平台，负责拉取市场新闻、A 股聚合报告、行情快照和 LLM 点评，并通过企业微信、Discord、Telegram 等渠道推送。
 
