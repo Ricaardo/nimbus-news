@@ -1,6 +1,8 @@
-# News-Fetcher 投资信息平台
+# nimbus-news
 
-News-Fetcher 是一个 Go + Vue 的投资信息聚合平台，负责拉取市场新闻、A 股聚合报告、行情快照和 LLM 点评，并通过企业微信、Discord、Telegram 等渠道推送。
+> Go + Vue market-intelligence pipeline for multi-source news, A-share reports, market snapshots, LLM analysis, and scheduled delivery.
+
+`nimbus-news` 是一个个人投资信息聚合平台，负责拉取市场新闻、A 股聚合报告、行情快照和 LLM 点评，并通过企业微信、Discord、Telegram 等渠道推送。
 
 ## 当前结构
 
